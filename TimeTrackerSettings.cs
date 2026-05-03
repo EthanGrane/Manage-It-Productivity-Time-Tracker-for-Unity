@@ -8,30 +8,30 @@ namespace UnityTimeTracker {
     // ── Icon style enum ───────────────────────────────────────────────────────
     public enum TimelineIconStyle {
         ZzzWork,    // Work-focused: sleep 💤 and worker 👷
-        SunMoon,   // Classic: moon 🌙 and sun ☀
+        SunMoon,    // Classic: moon 🌙 and sun ☀
     }
 
     // ── Serializable theme snapshot ───────────────────────────────────────────
     [Serializable]
     public class TimeTrackerThemeData {
-        // General colors
-        public float[] accentColor  = { 0.20f, 0.80f, 0.55f, 1f };
-        public float[] bgColor      = { 0.13f, 0.13f, 0.15f, 1f };
-        public float[] bgDarkColor  = { 0.08f, 0.08f, 0.10f, 1f };
-        public float[] textColor    = { 1f,    1f,    1f,    0.85f };
+        // General colors — Unity dark skin palette
+        public float[] accentColor  = { 0.15f, 0.351f, 1f, 1f };   // #468ee2 brighter blue
+        public float[] bgColor      = { 0.2196f, 0.2196f, 0.2196f, 1f };   // #383838 Unity panel
+        public float[] bgDarkColor  = { 0.1300f, 0.1300f, 0.1300f, 1f };   // #212121 deeper dark
+        public float[] textColor    = { 0.8900f, 0.8900f, 0.8900f, 1f };   // #e3e3e3 brighter text
 
-        // Timeline colors
-        public float[] offColor     = { 0.08f, 0.08f, 0.1f, 1f };
-        public float[] workColor    = { 0.075f, 0.15f, 0.11f, 1f };
-        public float[] moonColor    = { 0.75f, 0.82f, 1.00f, 0.90f };
-        public float[] sunColor     = { 1.00f, 0.88f, 0.35f, 0.92f };
-        public float[] sessionColor = { 0.20f, 0.80f, 0.55f, 1f };
+        // Timeline colors — clear off/work separation
+        public float[] offColor     = { 0.1300f, 0.1300f, 0.1300f, 1f };   // #212121 deep dark off
+        public float[] workColor    = { 0.2700f, 0.2700f, 0.2700f, 1f };   // #454545 visible work zone
+        public float[] moonColor    = { 0.6275f, 0.7059f, 0.8863f, 0.90f };
+        public float[] sunColor     = { 0.9608f, 0.8235f, 0.3098f, 0.95f };
+        public float[] sessionColor = { 0.3f, 0.4635f, 1f, 1f };   // same as accent
 
         // Commit marker color
-        public float[] commitColor  = { 1.00f, 0.75f, 0.20f, 0.95f };
+        public float[] commitColor  = { 0.9800f, 0.7600f, 0.2500f, 1.00f };
 
-        // Icon style (serialized as int for EditorPrefs JSON compat)
-        public int iconStyleIndex = 0; // 0 = SunMoon, 1 = ZzzWork
+        // Icon style
+        public int iconStyleIndex = 0;
 
         // Icon visibility
         public bool showOffIcon  = true;
@@ -39,7 +39,7 @@ namespace UnityTimeTracker {
 
         // Transition hours
         public float workStartHour = 8f;
-        public float workEndHour   = 15f;
+        public float workEndHour   = 17f;
 
         public float nightEndHour   = 6f;
         public float dayStartHour   = 7f;
@@ -81,9 +81,9 @@ namespace UnityTimeTracker {
     [Serializable]
     public class GitHubSettings {
         public bool   enabled         = false;
-        public string token           = "";   // Personal Access Token (read:repo scope)
-        public string owner           = "";   // GitHub username or org
-        public string repo            = "";   // Repository name
+        public string token           = "";
+        public string owner           = "";
+        public string repo            = "";
         public bool   showOnTimeline  = true;
         public bool   showOnCompact   = true;
     }
@@ -128,8 +128,7 @@ namespace UnityTimeTracker {
         }
 
         public static void Reset() {
-            _current = new TimeTrackerThemeData();
-            // GitHub credentials are NOT reset to avoid accidental data loss
+            _current = new TimeTrackerThemeData(); // new defaults = Unity style
             Save();
         }
     }

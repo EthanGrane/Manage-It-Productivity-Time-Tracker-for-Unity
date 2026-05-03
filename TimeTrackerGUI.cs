@@ -9,23 +9,35 @@ namespace UnityTimeTracker {
 
     public static class TimeTrackerGUI {
 
+        // ── Unity dark skin palette constants ────────────────────────
+        public static readonly Color U_BG        = new Color(0.2196f, 0.2196f, 0.2196f, 1f); // #383838 panel bg
+        public static readonly Color U_BG_DARK   = new Color(0.1647f, 0.1647f, 0.1647f, 1f); // #2a2a2a darker bg
+        public static readonly Color U_BG_MID    = new Color(0.2800f, 0.2800f, 0.2800f, 1f); // #474747 card bg
+        public static readonly Color U_BG_LIGHT  = new Color(0.3400f, 0.3400f, 0.3400f, 1f); // #575757 hover/active
+        public static readonly Color U_BORDER    = new Color(0.1400f, 0.1400f, 0.1400f, 1f); // #242424 border dark
+        public static readonly Color U_BORDER_HI = new Color(0.4200f, 0.4200f, 0.4200f, 1f); // #6b6b6b border light
+        public static readonly Color U_TEXT_BRIGHT = new Color(1.0000f, 1.0000f, 1.0000f, 1f); // #ffffff  headers/titles
+        public static readonly Color U_TEXT        = new Color(0.8600f, 0.8600f, 0.8600f, 1f); // #dbdbdb  normal text
+        public static readonly Color U_TEXT_DIM    = new Color(0.7000f, 0.7000f, 0.7000f, 1f); // #b3b3b3  secondary/captions
+        public static readonly Color U_TEXT_MUTED  = new Color(0.5500f, 0.5500f, 0.5500f, 1f); // #8c8c8c  placeholder/disabled
+        public static readonly Color U_BLUE        = new Color(0.1725f, 0.3647f, 0.5294f, 1f); // #2c5d87  Unity selection blue
+
         // ── Active theme accessors ────────────────────────────────────
         static TimeTrackerThemeData T => TimeTrackerSettings.Current;
 
         public static Color BgColor      => T.GetBg();
         public static Color BgDark       => T.GetBgDark();
-        public static Color BgCard       => new Color(
-            Mathf.Clamp01(T.GetBg().r + 0.03f),
-            Mathf.Clamp01(T.GetBg().g + 0.03f),
-            Mathf.Clamp01(T.GetBg().b + 0.04f));
+        public static Color BgCard       => U_BG_MID;
         public static Color SessionColor => T.GetSession();
         public static Color SessionDim   => new Color(T.GetSession().r, T.GetSession().g, T.GetSession().b, 0.35f);
         public static Color CommitColor  => T.GetCommit();
-        public static Color TickColor    => new Color(1f, 1f, 1f, 0.12f);
-        public static Color LabelColor   => new Color(T.GetText().r, T.GetText().g, T.GetText().b, 0.40f);
-        public static Color TextColor    => T.GetText();
+        public static Color TickColor    => new Color(1f, 1f, 1f, 0.10f);
+        public static Color LabelColor   => U_TEXT_DIM;    // secondary / caption
+        public static Color TextColor    => U_TEXT;        // normal body text
+        public static Color BrightColor  => U_TEXT_BRIGHT; // headers, selected labels
+        public static Color MutedColor   => U_TEXT_MUTED;  // disabled / placeholder
         public static Color AccentColor  => T.GetAccent();
-        public static Color DivColor     => new Color(1f, 1f, 1f, 0.06f);
+        public static Color DivColor     => U_BORDER;
 
         // ── Styles ───────────────────────────────────────────────────
         public static GUIStyle Style(int size, Color color, FontStyle fontStyle = FontStyle.Normal, TextAnchor anchor = TextAnchor.UpperLeft)
@@ -36,6 +48,57 @@ namespace UnityTimeTracker {
                 normal    = { textColor = color }
             };
 
+        // ── Unity-style button drawing ────────────────────────────────
+        // Draws a button that looks like a real Unity miniButton.
+        // Returns true if clicked.
+        public static bool DrawButton(Rect r, string label, int fontSize = 10,
+                Color? textColor = null, Color? bgColor = null, bool active = false) {
+            bool  hov = r.Contains(Event.current.mousePosition);
+            Color bg  = bgColor  ?? (active ? U_BG_LIGHT : U_BG_MID);
+            Color txt = textColor ?? (active ? U_TEXT_BRIGHT : U_TEXT);
+
+            // Lighten bg on hover
+            if (hov) bg = new Color(
+                Mathf.Min(bg.r + 0.08f, 1f),
+                Mathf.Min(bg.g + 0.08f, 1f),
+                Mathf.Min(bg.b + 0.08f, 1f), bg.a);
+            // Always keep text bright when a custom bgColor is provided (highlight button)
+            if (bgColor.HasValue) txt = U_TEXT_BRIGHT;
+
+            // Body
+            EditorGUI.DrawRect(r, bg);
+            // Top highlight (light edge)
+            EditorGUI.DrawRect(new Rect(r.x,              r.y,              r.width, 1), U_BORDER_HI);
+            // Bottom shadow
+            EditorGUI.DrawRect(new Rect(r.x,              r.y + r.height-1, r.width, 1), U_BORDER);
+            // Left edge
+            EditorGUI.DrawRect(new Rect(r.x,              r.y,              1, r.height), U_BORDER_HI);
+            // Right edge
+            EditorGUI.DrawRect(new Rect(r.x + r.width-1,  r.y,              1, r.height), U_BORDER);
+
+            GUI.Label(r, label, new GUIStyle(EditorStyles.label) {
+                fontSize  = fontSize,
+                alignment = TextAnchor.MiddleCenter,
+                normal    = { textColor = txt }
+            });
+
+            return GUI.Button(r, GUIContent.none, GUIStyle.none);
+        }
+
+        // Danger variant (red bg)
+        public static bool DrawDangerButton(Rect r, string label, int fontSize = 10) {
+            var dangerBg = new Color(0.55f, 0.13f, 0.13f, 1f);
+            EditorGUI.DrawRect(r, dangerBg);
+            EditorGUI.DrawRect(new Rect(r.x, r.y,              r.width, 1), new Color(0.7f, 0.2f, 0.2f, 1f));
+            EditorGUI.DrawRect(new Rect(r.x, r.y + r.height-1, r.width, 1), new Color(0.3f, 0.05f, 0.05f, 1f));
+            GUI.Label(r, label, new GUIStyle(EditorStyles.label) {
+                fontSize  = fontSize,
+                alignment = TextAnchor.MiddleCenter,
+                normal    = { textColor = new Color(0.95f, 0.75f, 0.75f, 1f) }
+            });
+            return GUI.Button(r, GUIContent.none, GUIStyle.none);
+        }
+
         // ── Components ───────────────────────────────────────────────
 
         public static void DrawDivider(float pad, float trackW, ref float y) {
@@ -44,15 +107,19 @@ namespace UnityTimeTracker {
         }
 
         public static void DrawSectionLabel(float pad, float y, string text) {
-            GUI.Label(new Rect(pad, y, 300, 16), text, Style(9, LabelColor, FontStyle.Bold));
+            GUI.Label(new Rect(pad, y, 300, 16), text, Style(9, BrightColor, FontStyle.Bold));
         }
 
         public static void DrawStatCard(Rect r, string label, string value, string sub = "") {
-            EditorGUI.DrawRect(r, BgCard);
-            GUI.Label(new Rect(r.x + 10, r.y + 8,  r.width - 20, 14), label, Style(9,  LabelColor));
-            GUI.Label(new Rect(r.x + 10, r.y + 20, r.width - 20, 24), value, Style(16, TextColor, FontStyle.Bold));
+            EditorGUI.DrawRect(r, U_BG_MID);
+            EditorGUI.DrawRect(new Rect(r.x,              r.y,              r.width, 1), U_BORDER);
+            EditorGUI.DrawRect(new Rect(r.x,              r.y + r.height-1, r.width, 1), U_BORDER_HI);
+            EditorGUI.DrawRect(new Rect(r.x,              r.y,              1, r.height), U_BORDER);
+            EditorGUI.DrawRect(new Rect(r.x + r.width-1,  r.y,              1, r.height), U_BORDER);
+            GUI.Label(new Rect(r.x + 10, r.y + 8,  r.width - 20, 14), label, Style(9,  LabelColor));     // caption — dim
+            GUI.Label(new Rect(r.x + 10, r.y + 20, r.width - 20, 24), value, Style(16, BrightColor, FontStyle.Bold)); // value — bright
             if (!string.IsNullOrEmpty(sub))
-                GUI.Label(new Rect(r.x + 10, r.y + 38, r.width - 20, 12), sub, Style(9, LabelColor));
+                GUI.Label(new Rect(r.x + 10, r.y + 38, r.width - 20, 12), sub, Style(9, MutedColor));    // sub — muted
         }
 
         // ── Returns flat bg color for a given hour ────────────────────
@@ -114,9 +181,7 @@ namespace UnityTimeTracker {
         }
 
         // ── Draw a commit diamond marker on the timeline ──────────────
-        // Returns tooltip rect (for hover detection by caller)
         static void DrawCommitDiamond(float cx, float cy, float size, Color col) {
-            // Draw a small rotated square (diamond) via 4 triangles approximated as rects
             for (int i = 0; i <= (int)size; i++) {
                 float half = size - i;
                 EditorGUI.DrawRect(new Rect(cx - half, cy - i, half * 2f, 1f), col);
@@ -125,7 +190,6 @@ namespace UnityTimeTracker {
         }
 
         // ── Overlay commit markers on a timeline strip ────────────────
-        // commitY: Y center of the markers; trackTop: for tooltip hit-test
         static string _hoveredCommitTooltip = null;
         static Rect   _tooltipRect;
 
@@ -138,7 +202,6 @@ namespace UnityTimeTracker {
 
             Color col = T.GetCommit();
 
-            // Group commits by minute-bucket to avoid overlapping diamonds
             var byMinute = new Dictionary<int, List<CommitInfo>>();
             foreach (var c in commits) {
                 int bucket = (int)(c.timestamp.TimeOfDay.TotalMinutes);
@@ -152,17 +215,13 @@ namespace UnityTimeTracker {
                 float cx = pad + (kv.Key / 1440f) * trackW;
                 float size = kv.Value.Count > 1 ? 5f : 4f;
 
-                // glow
                 DrawCommitDiamond(cx, markerY, size + 1.5f, new Color(col.r, col.g, col.b, 0.15f));
-                // main
                 DrawCommitDiamond(cx, markerY, size, col);
-                // stack count badge
                 if (kv.Value.Count > 1) {
                     GUI.Label(new Rect(cx + 5, markerY - 6, 20, 12),
                         $"×{kv.Value.Count}", Style(7, col));
                 }
 
-                // Tooltip on hover
                 Rect hitRect = new Rect(cx - 8, markerY - 8, 16, 16);
                 if (hitRect.Contains(Event.current.mousePosition)) {
                     string tip = string.Join("\n", kv.Value.Select(
@@ -211,8 +270,8 @@ namespace UnityTimeTracker {
             }
 
             // Borders
-            EditorGUI.DrawRect(new Rect(pad, y,              trackW, 1), new Color(1f,1f,1f,0.08f));
-            EditorGUI.DrawRect(new Rect(pad, y + trackH - 1, trackW, 1), new Color(1f,1f,1f,0.08f));
+            EditorGUI.DrawRect(new Rect(pad, y,              trackW, 1), U_BORDER);
+            EditorGUI.DrawRect(new Rect(pad, y + trackH - 1, trackW, 1), U_BORDER_HI);
 
             // Session blocks
             var sc = T.GetSession();
@@ -227,13 +286,10 @@ namespace UnityTimeTracker {
                 float h       = isLive ? trackH - vPadding * 2 : trackH;
                 float yOffset = isLive ? vPadding : 0f;
 
-                // glow
                 EditorGUI.DrawRect(new Rect(x0-1, y-1 + yOffset, w+2, h+2),
                     new Color(sc.r, sc.g, sc.b, 0.18f));
-                // main bar
                 EditorGUI.DrawRect(new Rect(x0, y + yOffset, w, h),
-                    new Color(sc.r, sc.g, sc.b, 0.5f));
-                // top highlight
+                    new Color(sc.r, sc.g, sc.b, 0.55f));
                 EditorGUI.DrawRect(new Rect(x0, y + yOffset, w, 2),
                     new Color(1f, 1f, 1f, 0.25f));
             }
@@ -248,11 +304,9 @@ namespace UnityTimeTracker {
 
             y += trackH;
 
-            // ── Commit markers (above = below the bar, before icons) ─────
             if (commits != null && commits.Count > 0)
                 DrawCommitMarkers(pad, trackW, trackTop, trackH, commits, aboveTimeline: false);
 
-            // ── Icons below timeline ─────────────────────────────────────
             float iconR = 5f;
             float iconY = y + 2f + iconR + (commits != null && commits.Count > 0 ? 12f : 0f);
 
@@ -276,9 +330,9 @@ namespace UnityTimeTracker {
                     float workCenter     = (th.workStartHour + th.workEndHour) / 2f;
                     float offLeftCenter  = th.workStartHour / 2f;
                     float offRightCenter = (th.workEndHour + 24f) / 2f;
-                    DrawEmoji(pad + (offLeftCenter / 24f) * trackW,                  iconY, "💤");
+                    DrawEmoji(pad + (offLeftCenter / 24f) * trackW,                    iconY, "💤");
                     DrawEmoji(pad + (Mathf.Min(offRightCenter, 23.5f) / 24f) * trackW, iconY, "💤");
-                    DrawEmoji(pad + (workCenter / 24f) * trackW,                     iconY, "👷");
+                    DrawEmoji(pad + (workCenter / 24f) * trackW,                       iconY, "👷");
                 }
             }
 
@@ -313,8 +367,8 @@ namespace UnityTimeTracker {
                     TimelineColorAt(hour));
             }
 
-            EditorGUI.DrawRect(new Rect(pad, y,              trackW, 1), new Color(1f,1f,1f,0.08f));
-            EditorGUI.DrawRect(new Rect(pad, y + trackH - 1, trackW, 1), new Color(1f,1f,1f,0.08f));
+            EditorGUI.DrawRect(new Rect(pad, y,              trackW, 1), U_BORDER);
+            EditorGUI.DrawRect(new Rect(pad, y + trackH - 1, trackW, 1), U_BORDER_HI);
 
             var sc = T.GetSession();
             foreach (var (start, end) in sessions) {
@@ -323,10 +377,9 @@ namespace UnityTimeTracker {
                 float w  = Mathf.Max(x1 - x0, 3f);
                 EditorGUI.DrawRect(new Rect(x0-1, y-1, w+2, trackH+2), new Color(sc.r, sc.g, sc.b, 0.18f));
                 EditorGUI.DrawRect(new Rect(x0,   y,   w,   trackH),   new Color(sc.r, sc.g, sc.b, 0.55f));
-                EditorGUI.DrawRect(new Rect(x0,   y,   w,   2),        new Color(1f, 1f, 1f, 0.35f));
+                EditorGUI.DrawRect(new Rect(x0,   y,   w,   2),        new Color(1f, 1f, 1f, 0.25f));
             }
 
-            // "Now" marker
             bool hasLive = sessions.Count > 0 &&
                 (DateTime.Now - sessions.Last().end).TotalMinutes < TimeTrackerCore.SESSION_GAP_MINUTES;
             if (hasLive) {
@@ -334,7 +387,6 @@ namespace UnityTimeTracker {
                 EditorGUI.DrawRect(new Rect(nowX - 1, y - 2, 2, trackH + 4), Color.white);
             }
 
-            // Commit ticks overlaid on the compact timeline
             if (commits != null && commits.Count > 0)
                 DrawCommitTicks(pad, trackW, y, trackH, commits);
 
@@ -347,7 +399,6 @@ namespace UnityTimeTracker {
                 System.Globalization.CultureInfo culture = null) {
             if (dailyMinutes == null || dailyMinutes.Count == 0) return;
 
-            // Use invariant (English) culture so day/month names are always English
             if (culture == null) culture = System.Globalization.CultureInfo.InvariantCulture;
 
             float  barAreaH = 64f;
@@ -356,7 +407,10 @@ namespace UnityTimeTracker {
             double maxMins  = dailyMinutes.Max(d => d.minutes);
             if (maxMins <= 0) maxMins = 1;
 
-            EditorGUI.DrawRect(new Rect(pad, y, trackW, barAreaH + 30), BgDark);
+            // Container
+            EditorGUI.DrawRect(new Rect(pad, y, trackW, barAreaH + 30), U_BG_DARK);
+            EditorGUI.DrawRect(new Rect(pad, y, trackW, 1), U_BORDER);
+            EditorGUI.DrawRect(new Rect(pad, y + barAreaH + 29, trackW, 1), U_BORDER);
 
             for (int i = 0; i < count; i++) {
                 var (date, mins) = dailyMinutes[i];
@@ -365,16 +419,16 @@ namespace UnityTimeTracker {
                 float by      = y + barAreaH - bh;
                 bool  isToday = date.Date == DateTime.Today;
 
-                EditorGUI.DrawRect(new Rect(bx, y+4, barW, barAreaH-10), new Color(1f,1f,1f,0.04f));
+                EditorGUI.DrawRect(new Rect(bx, y+4, barW, barAreaH-10), new Color(1f,1f,1f,0.03f));
                 if (mins > 0)
                     EditorGUI.DrawRect(new Rect(bx, by, barW, bh), isToday ? AccentColor : SessionDim);
 
                 GUI.Label(new Rect(bx, y+barAreaH-2, barW, 14),
                     date.ToString(labelFormat, culture).ToUpper(),
-                    Style(9, LabelColor, anchor: TextAnchor.UpperCenter));
+                    Style(9, isToday ? BrightColor : LabelColor, anchor: TextAnchor.UpperCenter));
                 if (mins > 15)
                     GUI.Label(new Rect(bx, by-14, barW, 14),
-                        $"{(int)(mins/60)}h", Style(8, TextColor, anchor: TextAnchor.UpperCenter));
+                        $"{(int)(mins/60)}h", Style(8, BrightColor, anchor: TextAnchor.UpperCenter));
                 if (isToday)
                     EditorGUI.DrawRect(new Rect(bx, y+barAreaH+14, barW, 2), AccentColor);
             }
@@ -385,10 +439,13 @@ namespace UnityTimeTracker {
                 DateTime start, DateTime end, bool isLast) {
             bool   isLive = isLast && (DateTime.Now - end).TotalMinutes < TimeTrackerCore.SESSION_GAP_MINUTES;
             double mins   = (end - start).TotalMinutes;
-            EditorGUI.DrawRect(new Rect(pad, y+5, 6, 6), isLive ? AccentColor : SessionDim);
-            GUI.Label(new Rect(pad+14,  y, 130, 18), $"{start:HH:mm} → {end:HH:mm}", Style(11, TextColor));
+
+            // Row background — alternating Unity inspector style
+            EditorGUI.DrawRect(new Rect(pad, y, trackW, 20), new Color(1f, 1f, 1f, 0.02f));
+            EditorGUI.DrawRect(new Rect(pad, y + 5, 4, 4), isLive ? AccentColor : SessionDim);
+            GUI.Label(new Rect(pad+14,  y, 130, 18), $"{start:HH:mm} → {end:HH:mm}", Style(11, BrightColor));
             GUI.Label(new Rect(pad+150, y,  80, 18), TimeTrackerCore.FormatDuration(mins),
-                Style(11, isLive ? TextColor : LabelColor));
+                Style(11, isLive ? AccentColor : TextColor));
             if (isLive)
                 GUI.Label(new Rect(pad+240, y+2, 50, 14), "● LIVE", Style(9, AccentColor, FontStyle.Bold));
             y += 20f;
@@ -396,7 +453,7 @@ namespace UnityTimeTracker {
 
         public static void DrawStatsGrid(float pad, float trackW, ref float y, PeriodStats ps) {
             float cardW = (trackW - 8) / 2f;
-            float cardH = 52f;
+            float cardH = 54f;
 
             var ic = System.Globalization.CultureInfo.InvariantCulture;
 

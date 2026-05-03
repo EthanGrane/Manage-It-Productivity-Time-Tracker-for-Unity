@@ -22,14 +22,10 @@ namespace UnityTimeTracker {
         // ── State ─────────────────────────────────────────────────────
         TimeTrackingData data;
 
-        // Week picker
         int weekOffset = 0;
-
-        // Month picker
         int monthYear  = DateTime.Today.Year;
         int monthMonth = DateTime.Today.Month;
 
-        // Day inspector
         DateTime? inspectedDay = null;
 
         static readonly string[] MONTH_NAMES = {
@@ -38,7 +34,6 @@ namespace UnityTimeTracker {
 
         static readonly CultureInfo EN = CultureInfo.InvariantCulture;
 
-        // Scroll positions
         Vector2 weekScroll;
         Vector2 monthScroll;
         Vector2 settingsScroll;
@@ -73,14 +68,13 @@ namespace UnityTimeTracker {
         //  OnGUI
         // ════════════════════════════════════════════════════════════
         void OnGUI() {
+            // Full window background — Unity panel color
             EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), TimeTrackerGUI.BgColor);
 
             float pad = 24f;
-            float y   = 14f;
+            float y   = 0f;
 
-            // ── Top-level NAV ────────────────────────────────────────
             DrawTopNav(pad, ref y);
-            y += 10f;
 
             if (currentView == AppView.TimeTracker)
                 DrawTrackerView(pad, ref y);
@@ -92,13 +86,16 @@ namespace UnityTimeTracker {
         //  TOP NAV  (Time Tracker | Task Manager)
         // ════════════════════════════════════════════════════════════
         void DrawTopNav(float pad, ref float y) {
-            float navH    = 32f;
-            float totalW  = position.width - pad * 2;
-            float navW    = totalW * 0.5f - 3f;  // space-between: two equal halves
+            float navH   = 28f;
+            float totalW = position.width - pad * 2;
+            float navW   = totalW * 0.5f - 3f;
 
-            // Background strip
-            EditorGUI.DrawRect(new Rect(0, y - 4, position.width, navH + 8),
+            // Toolbar background — darker than panel, like Unity's top bar
+            EditorGUI.DrawRect(new Rect(0, y, position.width, navH),
                 TimeTrackerGUI.BgDark);
+            // Bottom border
+            EditorGUI.DrawRect(new Rect(0, y + navH, position.width, 1),
+                TimeTrackerGUI.DivColor);
 
             string[]  navLabels = { "⏱  Time Tracker", "✓  Task Manager" };
             AppView[] navViews  = { AppView.TimeTracker, AppView.TaskManager };
@@ -109,24 +106,21 @@ namespace UnityTimeTracker {
                 Rect r      = new Rect(navX[i], y, navW, navH);
 
                 if (active) {
-                    EditorGUI.DrawRect(r, new Color(
-                        TimeTrackerGUI.AccentColor.r,
-                        TimeTrackerGUI.AccentColor.g,
-                        TimeTrackerGUI.AccentColor.b, 0.12f));
-                    EditorGUI.DrawRect(new Rect(navX[i], y + navH - 2, navW, 2),
-                        TimeTrackerGUI.AccentColor);
+                    // Active: slightly lighter bg + accent top line
+                    EditorGUI.DrawRect(r, TimeTrackerGUI.BgColor);
+                    EditorGUI.DrawRect(new Rect(navX[i], y, navW, 2), TimeTrackerGUI.AccentColor);
                     GUI.Label(r, navLabels[i],
-                        TimeTrackerGUI.Style(12, TimeTrackerGUI.AccentColor,
+                        TimeTrackerGUI.Style(11, TimeTrackerGUI.TextColor,
                             FontStyle.Bold, TextAnchor.MiddleCenter));
                 } else {
-                    bool navHovered = r.Contains(Event.current.mousePosition);
-                    if (navHovered) {
+                    bool hov = r.Contains(Event.current.mousePosition);
+                    if (hov) {
                         EditorGUI.DrawRect(r, new Color(1f, 1f, 1f, 0.05f));
                         Repaint();
                     }
                     GUI.Label(r, navLabels[i],
-                        TimeTrackerGUI.Style(12,
-                            navHovered ? TimeTrackerGUI.TextColor : TimeTrackerGUI.LabelColor,
+                        TimeTrackerGUI.Style(11,
+                            hov ? TimeTrackerGUI.TextColor : TimeTrackerGUI.LabelColor,
                             anchor: TextAnchor.MiddleCenter));
                     if (GUI.Button(r, GUIContent.none, GUIStyle.none)) {
                         currentView  = navViews[i];
@@ -136,7 +130,7 @@ namespace UnityTimeTracker {
                 }
             }
 
-            y += navH + 4f;
+            y += navH + 1f;
         }
 
         // ════════════════════════════════════════════════════════════
@@ -144,7 +138,7 @@ namespace UnityTimeTracker {
         // ════════════════════════════════════════════════════════════
         void DrawTrackerView(float pad, ref float y) {
             DrawTabs(pad, ref y);
-            y += 12f;
+            y += 10f;
 
             switch (selectedTab) {
                 case Tab.Today:    DrawToday(pad, ref y);    break;
@@ -161,9 +155,15 @@ namespace UnityTimeTracker {
         void DrawTabs(float pad, ref float y) {
             int   mainCount = TAB_LABELS.Length - 1;
             float gearW     = 30f;
-            float gap       = 6f;
+            float gap       = 1f;  // Unity uses hairline separators
             float mainW     = (position.width - pad * 2 - (mainCount - 1) * gap - gap - gearW) / mainCount;
-            float tabH      = 26f;
+            float tabH      = 24f;
+
+            // Tab bar background
+            EditorGUI.DrawRect(new Rect(0, y, position.width, tabH),
+                new Color(0.1882f, 0.1882f, 0.1882f, 1f));
+            // Bottom border
+            EditorGUI.DrawRect(new Rect(0, y + tabH, position.width, 1), TimeTrackerGUI.DivColor);
 
             for (int i = 0; i < TAB_LABELS.Length; i++) {
                 bool  active = (int)selectedTab == i;
@@ -173,20 +173,31 @@ namespace UnityTimeTracker {
                     : mainCount * (mainW + gap));
 
                 Rect r = new Rect(tx, y, tw, tabH);
-                bool tabHovered = !active && r.Contains(Event.current.mousePosition);
-                Color tabBg = active    ? TimeTrackerGUI.AccentColor
-                            : tabHovered ? new Color(TimeTrackerGUI.BgDark.r + 0.06f,
-                                                     TimeTrackerGUI.BgDark.g + 0.06f,
-                                                     TimeTrackerGUI.BgDark.b + 0.06f)
-                            : TimeTrackerGUI.BgDark;
+
+                // Tab background
+                Color tabBg = active
+                    ? TimeTrackerGUI.BgColor          // active = same as panel (raised look)
+                    : new Color(0.1882f, 0.1882f, 0.1882f, 1f); // inactive = darker
                 EditorGUI.DrawRect(r, tabBg);
+
+                // Active: accent line on top
+                if (active)
+                    EditorGUI.DrawRect(new Rect(tx, y, tw, 2), TimeTrackerGUI.AccentColor);
+
+                // Vertical separator between tabs
+                if (i < TAB_LABELS.Length - 1)
+                    EditorGUI.DrawRect(new Rect(tx + tw, y, 1, tabH),
+                        new Color(0.12f, 0.12f, 0.12f, 1f));
+
+                bool hov = !active && r.Contains(Event.current.mousePosition);
+                if (hov) { EditorGUI.DrawRect(r, new Color(1f,1f,1f,0.04f)); Repaint(); }
+
                 GUI.Label(r, TAB_LABELS[i], TimeTrackerGUI.Style(
-                    i < mainCount ? 11 : 14,
-                    active       ? TimeTrackerGUI.BgColor
-                  : tabHovered   ? TimeTrackerGUI.TextColor
+                    i < mainCount ? 10 : 13,
+                    active   ? TimeTrackerGUI.TextColor
+                  : hov      ? TimeTrackerGUI.TextColor
                   : TimeTrackerGUI.LabelColor,
-                    FontStyle.Bold, TextAnchor.MiddleCenter));
-                if (tabHovered) Repaint();
+                    anchor: TextAnchor.MiddleCenter));
 
                 if (!active && GUI.Button(r, GUIContent.none, GUIStyle.none)) {
                     selectedTab  = (Tab)i;
@@ -194,6 +205,7 @@ namespace UnityTimeTracker {
                     Repaint();
                 }
             }
+
             y += tabH;
         }
 
@@ -208,7 +220,6 @@ namespace UnityTimeTracker {
             DrawBigNumber(pad, trackW, ref y, TimeTrackerCore.FormatDuration(total),
                 $"{sessions.Count} session{(sessions.Count != 1 ? "s" : "")} today");
 
-            // Fetch commits
             EnsureCommitsFetched(DateTime.Today, DateTime.Today);
             var commits = GitHubCommitCache.GetForDate(DateTime.Today);
 
@@ -230,7 +241,6 @@ namespace UnityTimeTracker {
 
             y += 8f;
 
-            // ── Task integration ──────────────────────────────────────
             DrawTodayTasksIntegration(pad, trackW, ref y);
 
             TimeTrackerGUI.DrawDivider(pad, trackW, ref y);
@@ -274,22 +284,18 @@ namespace UnityTimeTracker {
 
             if (!hasWorking && !hasDue) return;
 
-            // Section header
             TimeTrackerGUI.DrawSectionLabel(pad, y, "TASKS");
             y += 18f;
 
-            // Working On pill
             if (hasWorking) {
-                foreach (var task in workingOn) {
+                foreach (var task in workingOn)
                     DrawTaskPill(pad, trackW, ref y, task,
                         new Color(0.20f, 0.55f, 0.90f, 1f), "Working On");
-                }
             }
 
-            // Due today pills
             if (hasDue) {
                 foreach (var task in dueToday) {
-                    if (task.statusId == "working_on") continue; // already shown
+                    if (task.statusId == "working_on") continue;
                     bool overdue = task.IsOverdue;
                     Color col = overdue
                         ? new Color(0.95f, 0.30f, 0.30f, 1f)
@@ -302,7 +308,7 @@ namespace UnityTimeTracker {
             y += 4f;
         }
 
-        // ── Inline task block (works in both window-space y and scroll-space sy) ──
+        // ── Inline task block ─────────────────────────────────────────
         void DrawTasksBlock(float x, float cw, ref float sy) {
             if (taskPanel == null) return;
             var workingOn = taskPanel.GetWorkingOn();
@@ -335,6 +341,7 @@ namespace UnityTimeTracker {
             float pillH = 26f;
             Rect  r     = new Rect(x, sy, cw, pillH);
             EditorGUI.DrawRect(r, TimeTrackerGUI.BgCard);
+            EditorGUI.DrawRect(new Rect(x, sy, cw, 1),   TimeTrackerGUI.DivColor);
             EditorGUI.DrawRect(new Rect(x, sy, 3, pillH), accentCol);
 
             float dotX = x + 10f;
@@ -367,9 +374,9 @@ namespace UnityTimeTracker {
             Rect  r     = new Rect(pad, y, trackW, pillH);
 
             EditorGUI.DrawRect(r, TimeTrackerGUI.BgCard);
+            EditorGUI.DrawRect(new Rect(pad, y, trackW, 1), TimeTrackerGUI.DivColor);
             EditorGUI.DrawRect(new Rect(pad, y, 3, pillH), accentCol);
 
-            // Tag dots
             float dotX = pad + 10f;
             foreach (var tagId in task.tagIds) {
                 var tag = TaskManagerCore.GetTag(taskPanel.Board, tagId);
@@ -379,18 +386,14 @@ namespace UnityTimeTracker {
             }
 
             GUI.Label(new Rect(dotX + 2, y + 4, trackW - 130, 18),
-                task.title,
-                TimeTrackerGUI.Style(11, TimeTrackerGUI.TextColor));
+                task.title, TimeTrackerGUI.Style(11, TimeTrackerGUI.TextColor));
 
-            // Badge
             float bw = badge.Length * 7f + 12f;
             Rect  br = new Rect(pad + trackW - bw - 4, y + 4, bw, 18);
             EditorGUI.DrawRect(br, new Color(accentCol.r, accentCol.g, accentCol.b, 0.2f));
             GUI.Label(br, badge,
-                TimeTrackerGUI.Style(9, accentCol,
-                    FontStyle.Bold, TextAnchor.MiddleCenter));
+                TimeTrackerGUI.Style(9, accentCol, FontStyle.Bold, TextAnchor.MiddleCenter));
 
-            // Click → switch to task manager and open task
             if (GUI.Button(r, GUIContent.none, GUIStyle.none)) {
                 currentView = AppView.TaskManager;
                 Repaint();
@@ -652,11 +655,14 @@ namespace UnityTimeTracker {
 
                 float cx = x + col2 * (cellW + gap);
 
+                // Unity inspector cell style
                 Color cellBg = today
                     ? new Color(TimeTrackerGUI.AccentColor.r, TimeTrackerGUI.AccentColor.g,
                                 TimeTrackerGUI.AccentColor.b, 0.15f)
                     : TimeTrackerGUI.BgCard;
                 EditorGUI.DrawRect(new Rect(cx, rowY, cellW, cellH), cellBg);
+                EditorGUI.DrawRect(new Rect(cx, rowY, cellW, 1), TimeTrackerGUI.DivColor);
+                EditorGUI.DrawRect(new Rect(cx, rowY, 1, cellH), TimeTrackerGUI.DivColor);
 
                 if (mins > 0 && !future) {
                     float fillH   = Mathf.Max(2f, (float)(mins / maxDayMins) * (cellH - 2));
@@ -1080,7 +1086,7 @@ namespace UnityTimeTracker {
 
         void DrawBigNumber(float pad, float trackW, ref float y, string value, string sub) {
             GUI.Label(new Rect(pad, y,      trackW, 36), value,
-                TimeTrackerGUI.Style(26, TimeTrackerGUI.AccentColor, FontStyle.Bold));
+                TimeTrackerGUI.Style(26, TimeTrackerGUI.BrightColor, FontStyle.Bold));
             GUI.Label(new Rect(pad, y + 30, trackW, 18), sub,
                 TimeTrackerGUI.Style(11, TimeTrackerGUI.LabelColor));
             y += 56f;
@@ -1099,6 +1105,7 @@ namespace UnityTimeTracker {
         }
 
         void DrawCommitRow(float pad, float trackW, ref float y, CommitInfo c) {
+            EditorGUI.DrawRect(new Rect(pad, y, trackW, 18), new Color(1f,1f,1f,0.02f));
             EditorGUI.DrawRect(new Rect(pad, y + 5, 4, 4), TimeTrackerGUI.CommitColor);
             GUI.Label(new Rect(pad + 12, y, 50, 16), c.timestamp.ToString("HH:mm"),
                 TimeTrackerGUI.Style(10, TimeTrackerGUI.LabelColor));

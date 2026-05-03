@@ -43,7 +43,7 @@ namespace UnityTimeTracker {
 
         // Column config
         const float COL_GAP   = 8f;
-        const float COL_MIN_W = 250f;
+        const float COL_MIN_W = 270f;
         float colWidthOverride = 0f; // 0 = auto, >=10 = manual
         
         // Card layout constants
@@ -169,132 +169,114 @@ namespace UnityTimeTracker {
             kanbanScroll    = GUI.BeginScrollView(scrollView, kanbanScroll, content);
             DrawKanban(0, 0, colW, contentH);
             GUI.EndScrollView();
+        }
 
-            // ── Slider abajo a la derecha, flotando sobre el kanban ───────────────
-            // ── Slider abajo a la derecha, flotando sobre el kanban ───────────────
-            float sliderW  = 100f;
-            float widgetW  = sliderW + 52f;
-            float widgetH  = 20f;
-            float wx       = pad + trackW - widgetW - 6f;
-            float wy       = windowH - widgetH - 32f;
+        // ── Top bar ───────────────────────────────────────────────────────────
 
-            // Label valor
-            string valLabel = colWidthOverride < 10f ? "Auto" : $"{(int)colWidthOverride}px";
-            GUI.Label(new Rect(wx, wy + 3f, 36f, 14f), valLabel,
-                TimeTrackerGUI.Style(9, TimeTrackerGUI.AccentColor));
+        void DrawTopBar(float pad, ref float y, float trackW) 
+        {
+            var ui = TaskManagerCore.UIState;
 
-            // Slider
+            GUI.Label(new Rect(pad, y + 4, 50, 16), "FILTER",
+                TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor, FontStyle.Bold));
+
+            float tx = pad + 56f;
+
+            // All chip
+            bool allActive = string.IsNullOrEmpty(ui.activeFilterTag);
+            DrawFilterChip(ref tx, y, "All", null, allActive, () => {
+                ui.activeFilterTag = "";
+                TaskManagerCore.SaveUIState();
+            });
+
+            // Tag chips
+            foreach (var tag in board.tags) {
+                bool active = ui.activeFilterTag == tag.id;
+                var  cap    = tag;
+                DrawFilterChip(ref tx, y, tag.label, tag.GetColor(), active, () => {
+                    ui.activeFilterTag = active ? "" : cap.id;
+                    TaskManagerCore.SaveUIState();
+                });
+            }
+
+            // + Tag
+            if (!isCreatingTag) {
+                if (DrawSmallButton(ref tx, y, "+ Tag")) {
+                    isCreatingTag = true;
+                    newTagLabel   = "";
+                    newTagColor   = new Color(
+                        UnityEngine.Random.Range(0.25f, 0.85f),
+                        UnityEngine.Random.Range(0.25f, 0.85f),
+                        UnityEngine.Random.Range(0.25f, 0.85f), 1f);
+                }
+            } else {
+                DrawTagCreator(pad, ref y, trackW);
+                return;
+            }
+
+            // + Column
+            tx += 4f;
+            if (DrawSmallButton(ref tx, y, "+ Column")) {
+                isCreatingStatus = true;
+                newStatusLabel   = "";
+            }
+
+            // ⚙ gear — far right
+            Rect gearR = new Rect(pad + trackW - 28f, y, 28f, 24f);
+
+            // + New Task
+            float btnW = 92f;
+            Rect  addR = new Rect(pad + trackW - 28f - 4f - btnW, y, btnW, 24f);
+            if (TimeTrackerGUI.DrawButton(addR, "+ New Task", fontSize: 11, bgColor: TimeTrackerGUI.AccentColor)) {
+                isCreatingTask = true;
+                newTaskTitle   = "";
+                newTaskDueDate = DateTime.Today.ToString("yyyy-MM-dd");
+                newTaskDesc    = "";
+                if (string.IsNullOrEmpty(TaskManagerCore.UIState.lastTagId))
+                    TaskManagerCore.UIState.lastTagId = "default_tag";
+            }
+
+            Color gearTxt = showTaskSettings ? TimeTrackerGUI.AccentColor : TimeTrackerGUI.TextColor;
+            if (TimeTrackerGUI.DrawButton(gearR, "⚙", fontSize: 13,
+                    textColor: gearTxt,
+                    bgColor: showTaskSettings ? TimeTrackerGUI.U_BG_LIGHT : TimeTrackerGUI.U_BG_MID)) {
+                showTaskSettings = !showTaskSettings;
+                editingTask      = null;
+            }
+
+            y += 32f;
+
+            // ── Fila 2: slider de ancho de columna ───────────────────────────────
+            float sliderLabelW = 38f;
+            float sliderW      = 120f;
+            float sx           = pad;
+            
             float newOverride = GUI.HorizontalSlider(
-                new Rect(wx + 38f, wy + 5f, sliderW, 12f),
+                new Rect(sx, y + 6, sliderW, 12),
                 colWidthOverride, 0f, 500f);
             if (Mathf.Abs(newOverride - colWidthOverride) > 0.5f) {
                 colWidthOverride = newOverride;
                 repaint?.Invoke();
             }
+            sx += sliderW + 6f;
 
-            // Botón Auto (solo visible cuando hay override activo)
             if (colWidthOverride >= 10f) {
-                Rect resetR = new Rect(wx + 38f + sliderW + 4f, wy + 2f, 34f, 16f);
-                EditorGUI.DrawRect(resetR, TimeTrackerGUI.BgDark);
-                GUI.Label(resetR, "Auto",
-                    TimeTrackerGUI.Style(9, BrightText, anchor: TextAnchor.MiddleCenter));
-                if (GUI.Button(resetR, GUIContent.none, GUIStyle.none)) {
+                Rect resetR = new Rect(sx, y + 2, 36f, 16f);
+                if (TimeTrackerGUI.DrawButton(resetR, "Auto", fontSize: 9)) {
                     colWidthOverride = 0f;
                     repaint?.Invoke();
                 }
             }
+
+            y += 22f;
+
+            if (isCreatingStatus)
+                DrawStatusCreator(pad, ref y, trackW);
+
+            EditorGUI.DrawRect(new Rect(pad, y, trackW, 1), TimeTrackerGUI.DivColor);
+            y += 8f;
         }
 
-
-        // ── Top bar ───────────────────────────────────────────────────────────
-
-void DrawTopBar(float pad, ref float y, float trackW)
-{
-    var ui = TaskManagerCore.UIState;
-
-    GUI.Label(new Rect(pad, y + 4, 50, 16), "FILTER",
-        TimeTrackerGUI.Style(9, TimeTrackerGUI.LabelColor, FontStyle.Bold));
-
-    float tx = pad + 56f;
-
-    // All chip
-    bool allActive = string.IsNullOrEmpty(ui.activeFilterTag);
-    DrawFilterChip(ref tx, y, "All", null, allActive, () => {
-        ui.activeFilterTag = "";
-        TaskManagerCore.SaveUIState();
-    });
-
-    // Tag chips
-    foreach (var tag in board.tags) {
-        bool active = ui.activeFilterTag == tag.id;
-        var  cap    = tag;
-        DrawFilterChip(ref tx, y, tag.label, tag.GetColor(), active, () => {
-            ui.activeFilterTag = active ? "" : cap.id;
-            TaskManagerCore.SaveUIState();
-        });
-    }
-
-    // + Tag
-    if (!isCreatingTag) {
-        if (DrawSmallButton(ref tx, y, "+ Tag")) {
-            isCreatingTag = true;
-            newTagLabel   = "";
-            newTagColor   = new Color(
-                UnityEngine.Random.Range(0.25f, 0.85f),
-                UnityEngine.Random.Range(0.25f, 0.85f),
-                UnityEngine.Random.Range(0.25f, 0.85f), 1f);
-        }
-    } else {
-        DrawTagCreator(pad, ref y, trackW);
-        return;
-    }
-
-    // + Column
-    tx += 4f;
-    if (DrawSmallButton(ref tx, y, "+ Column")) {
-        isCreatingStatus = true;
-        newStatusLabel   = "";
-    }
-
-    // ⚙ gear — far right
-    Rect gearR = new Rect(pad + trackW - 28f, y, 28f, 24f);
-
-    // + New Task
-    float btnW = 92f;
-    Rect  addR = new Rect(pad + trackW - 28f - 4f - btnW, y, btnW, 24f);
-    EditorGUI.DrawRect(addR, TimeTrackerGUI.AccentColor);
-    GUI.Label(addR, "+ New Task",
-        TimeTrackerGUI.Style(11, TimeTrackerGUI.BgColor, FontStyle.Bold, TextAnchor.MiddleCenter));
-    if (GUI.Button(addR, GUIContent.none, GUIStyle.none)) {
-        isCreatingTask = true;
-        newTaskTitle   = "";
-        newTaskDueDate = DateTime.Today.ToString("yyyy-MM-dd");
-        newTaskDesc    = "";
-        if (string.IsNullOrEmpty(TaskManagerCore.UIState.lastTagId))
-            TaskManagerCore.UIState.lastTagId = "default_tag";
-    }
-
-    Color gearBg = showTaskSettings
-        ? new Color(TimeTrackerGUI.AccentColor.r, TimeTrackerGUI.AccentColor.g,
-                    TimeTrackerGUI.AccentColor.b, 0.25f)
-        : TimeTrackerGUI.BgDark;
-    EditorGUI.DrawRect(gearR, gearBg);
-    GUI.Label(gearR, "⚙",
-        TimeTrackerGUI.Style(13, showTaskSettings ? TimeTrackerGUI.AccentColor : BrightText,
-            anchor: TextAnchor.MiddleCenter));
-    if (GUI.Button(gearR, GUIContent.none, GUIStyle.none)) {
-        showTaskSettings = !showTaskSettings;
-        editingTask      = null;
-    }
-
-    y += 32f;
-
-    if (isCreatingStatus)
-        DrawStatusCreator(pad, ref y, trackW);
-
-    EditorGUI.DrawRect(new Rect(pad, y, trackW, 1), TimeTrackerGUI.DivColor);
-    y += 8f;
-}
         // ── Kanban columns ────────────────────────────────────────────────────
 
         void DrawKanban(float x, float y, float colW, float contentH) {
@@ -313,7 +295,7 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 // Header
                 GUI.Label(new Rect(colX + 10, y + 10, colW - 50, 18),
                     status.label.ToUpper(),
-                    TimeTrackerGUI.Style(10, TimeTrackerGUI.TextColor, FontStyle.Bold));
+                    TimeTrackerGUI.Style(10, TimeTrackerGUI.BrightColor, FontStyle.Bold));
                 GUI.Label(new Rect(colX + colW - 42, y + 12, 36, 14),
                     tasks.Count.ToString(),
                     TimeTrackerGUI.Style(10, stCol, anchor: TextAnchor.UpperRight));
@@ -537,7 +519,7 @@ void DrawTopBar(float pad, ref float y, float trackW)
             Rect  titleRow  = new Rect(contentX - 2f, row1Y - 2f, titleW + 2f, titleRowH);
             EditorGUI.DrawRect(titleRow, tagTint);
             GUI.Label(new Rect(contentX + 2f, row1Y, titleW - 4f, LINE_H),
-                task.title, TimeTrackerGUI.Style(11, TimeTrackerGUI.TextColor, FontStyle.Bold));
+                task.title, TimeTrackerGUI.Style(11, TimeTrackerGUI.BrightColor, FontStyle.Bold));
 
             // Row 2: description o due date
             float row2Y   = row1Y + LINE_H + 1f;
@@ -549,7 +531,7 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 string descText = task.description.Length > maxChars
                     ? task.description.Substring(0, maxChars - 1) + "…"
                     : task.description;
-                var descStyle      = TimeTrackerGUI.Style(9, BrightText);
+                var descStyle      = TimeTrackerGUI.Style(9, TimeTrackerGUI.TextColor);
                 descStyle.wordWrap = true;
                 descStyle.clipping = TextClipping.Clip;
                 GUI.Label(new Rect(contentX, row2Y, contentW, descH), descText, descStyle);
@@ -593,9 +575,7 @@ void DrawTopBar(float pad, ref float y, float trackW)
 
                 if (canRight) {
                     Rect rr = new Rect(rightX - navBtnW, btnTop, navBtnW, navBtnH);
-                    EditorGUI.DrawRect(rr, new Color(1f, 1f, 1f, 0.18f));
-                    GUI.Label(rr, "▶", TimeTrackerGUI.Style(9, BrightText, anchor: TextAnchor.MiddleCenter));
-                    if (GUI.Button(rr, GUIContent.none, GUIStyle.none)) {
+                    if (TimeTrackerGUI.DrawButton(rr, "▶", fontSize: 9)) {
                         TaskManagerCore.MoveTask(board, task, board.statuses[colIdx + 1].id);
                         Save(); repaint?.Invoke();
                     }
@@ -603,9 +583,7 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 }
                 if (canLeft) {
                     Rect lr = new Rect(rightX - navBtnW, btnTop, navBtnW, navBtnH);
-                    EditorGUI.DrawRect(lr, new Color(1f, 1f, 1f, 0.18f));
-                    GUI.Label(lr, "◀", TimeTrackerGUI.Style(9, BrightText, anchor: TextAnchor.MiddleCenter));
-                    if (GUI.Button(lr, GUIContent.none, GUIStyle.none)) {
+                    if (TimeTrackerGUI.DrawButton(lr, "◀", fontSize: 9)) {
                         TaskManagerCore.MoveTask(board, task, board.statuses[colIdx - 1].id);
                         Save(); repaint?.Invoke();
                     }
@@ -633,21 +611,16 @@ void DrawTopBar(float pad, ref float y, float trackW)
             if (editingTask == null) return;
 
             // ‹ back
-            if (GUI.Button(new Rect(pad, y, 22, 22), "‹",
-                    new GUIStyle(EditorStyles.miniButton) {
-                        fontSize = 14, normal = { textColor = TimeTrackerGUI.TextColor } })) {
+            if (TimeTrackerGUI.DrawButton(new Rect(pad, y, 22, 22), "‹", fontSize: 14)) {
                 Save(); editingTask = null; repaint?.Invoke(); return;
             }
 
             GUI.Label(new Rect(pad + 30, y + 3, trackW - 130, 18), "TASK DETAIL",
-                TimeTrackerGUI.Style(12, TimeTrackerGUI.LabelColor, FontStyle.Bold));
+                TimeTrackerGUI.Style(12, TimeTrackerGUI.BrightColor, FontStyle.Bold));
 
-            // Delete — red bg, white text
+            // Delete — danger style
             Rect delR = new Rect(pad + trackW - 72, y, 72, 22);
-            EditorGUI.DrawRect(delR, new Color(0.80f, 0.18f, 0.18f, 1f));
-            GUI.Label(delR, "🗑 Delete",
-                TimeTrackerGUI.Style(10, Color.white, FontStyle.Bold, TextAnchor.MiddleCenter));
-            if (GUI.Button(delR, GUIContent.none, GUIStyle.none)) {
+            if (TimeTrackerGUI.DrawDangerButton(delR, "🗑 Delete", fontSize: 10)) {
                 TaskManagerCore.DeleteTask(board, editingTask);
                 Save(); editingTask = null; repaint?.Invoke(); return;
             }
@@ -687,11 +660,11 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 bool sel = editingTask.statusId == st.id;
                 Rect r   = new Rect(i * (sbW + 6f), sy, sbW, 24);
                 Color stCol = GetStatusColor(st);
-                EditorGUI.DrawRect(r, sel ? stCol : TimeTrackerGUI.BgDark);
-                GUI.Label(r, st.label,
-                    TimeTrackerGUI.Style(10, sel ? TimeTrackerGUI.BgColor : BrightText,
-                        FontStyle.Bold, TextAnchor.MiddleCenter));
-                if (!sel && GUI.Button(r, GUIContent.none, GUIStyle.none)) { TaskManagerCore.MoveTask(board, editingTask, st.id); Save(); }
+                if (TimeTrackerGUI.DrawButton(r, st.label, fontSize: 10,
+                        bgColor: sel ? stCol : (Color?)null,
+                        active: sel)) {
+                    TaskManagerCore.MoveTask(board, editingTask, st.id); Save();
+                }
             }
             sy += 32f;
 
@@ -706,11 +679,11 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 ("Today", 0), ("+1 Day", 1), ("+1 Week", 7), ("-1 Day", -1), ("-1 Week", -7)
             };
             foreach (var (dl, dd) in dateBtns) {
-                float dw = dl.Length * 6.5f + 8f;
-                Color dc = dd == 0 ? TimeTrackerGUI.AccentColor : BrightText;
-                if (GUI.Button(new Rect(dbx, sy, dw, 18), dl,
-                        new GUIStyle(EditorStyles.miniButton) {
-                            fontSize = 9, normal = { textColor = dc } })) {
+                float dw  = dl.Length * 6.5f + 8f;
+                bool  isTd = dd == 0;
+                if (TimeTrackerGUI.DrawButton(new Rect(dbx, sy, dw, 18), dl, fontSize: 9,
+                        bgColor:   isTd ? TimeTrackerGUI.AccentColor : null,
+                        textColor: isTd ? TimeTrackerGUI.BrightColor : null)) {
                     if (dd == 0) editingTask.dueDate = DateTime.Today.ToString("yyyy-MM-dd");
                     else {
                         DateTime.TryParse(editingTask.dueDate, out var cur);
@@ -727,24 +700,41 @@ void DrawTopBar(float pad, ref float y, float trackW)
             SectionLabel(0, sy, "TAGS"); sy += 16f;
             float tagX = 0f;
             foreach (var tag in board.tags) {
-                bool  has    = editingTask.tagIds.Contains(tag.id);
-                Color chipBg = has ? tag.GetColor() : TimeTrackerGUI.BgDark;
-                Color chipTx = has ? TimeTrackerGUI.BgColor : BrightText;
-                float chipW  = Mathf.Max(48f, tag.label.Length * 7f + 16f);
+                bool  has   = editingTask.tagIds.Contains(tag.id);
+                float chipW = Mathf.Max(48f, tag.label.Length * 7f + 16f);
                 if (tagX + chipW > cw) { tagX = 0; sy += 24f; }
-                Rect cr = new Rect(tagX, sy, chipW, 20);
-                EditorGUI.DrawRect(cr, chipBg);
-                GUI.Label(cr, tag.label,
-                    TimeTrackerGUI.Style(9, chipTx, anchor: TextAnchor.MiddleCenter));
-                var cap = tag;
+                Rect  cr  = new Rect(tagX, sy, chipW, 20);
+                Color tc  = tag.GetColor();
+                bool  hov = cr.Contains(Event.current.mousePosition);
+                var   cap = tag;
+
+                if (has) {
+                    // Active: solid tag color bg, white text
+                    Color bg = hov ? new Color(Mathf.Min(tc.r+0.08f,1f), Mathf.Min(tc.g+0.08f,1f), Mathf.Min(tc.b+0.08f,1f), 1f) : tc;
+                    EditorGUI.DrawRect(cr, bg);
+                    EditorGUI.DrawRect(new Rect(cr.x, cr.y,             cr.width, 1), new Color(1f,1f,1f,0.2f));
+                    EditorGUI.DrawRect(new Rect(cr.x, cr.y+cr.height-1, cr.width, 1), TimeTrackerGUI.U_BORDER);
+                    GUI.Label(cr, tag.label, TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor, FontStyle.Bold, TextAnchor.MiddleCenter));
+                } else {
+                    // Inactive: dark bg with tag-colored border, bright text
+                    Color bg = hov ? TimeTrackerGUI.U_BG_LIGHT : TimeTrackerGUI.U_BG_MID;
+                    EditorGUI.DrawRect(cr, bg);
+                    // Tag-colored border on all sides
+                    EditorGUI.DrawRect(new Rect(cr.x,            cr.y,            cr.width, 1), tc);
+                    EditorGUI.DrawRect(new Rect(cr.x,            cr.y+cr.height-1,cr.width, 1), tc);
+                    EditorGUI.DrawRect(new Rect(cr.x,            cr.y,            1, cr.height), tc);
+                    EditorGUI.DrawRect(new Rect(cr.x+cr.width-1, cr.y,            1, cr.height), tc);
+                    GUI.Label(cr, tag.label, TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor, anchor: TextAnchor.MiddleCenter));
+                }
+
                 if (GUI.Button(cr, GUIContent.none, GUIStyle.none)) {
-                    if (has) {
-                        if (editingTask.tagIds.Count > 1) { editingTask.tagIds.Remove(cap.id); Save(); }
-                    } else {
+                    if (!has) {
+                        editingTask.tagIds.Clear();
                         editingTask.tagIds.Add(cap.id);
                         TaskManagerCore.UIState.lastTagId = cap.id;
                         Save();
                     }
+                    repaint?.Invoke();
                 }
                 tagX += chipW + 6f;
             }
@@ -894,9 +884,7 @@ void DrawTopBar(float pad, ref float y, float trackW)
             };
             foreach (var (dl, dd) in dateBtns) {
                 float dw = dl.Length * 6.5f + 8f;
-                if (GUI.Button(new Rect(dbx, sy, dw, 18), dl,
-                        new GUIStyle(EditorStyles.miniButton) {
-                            fontSize = 9, normal = { textColor = BrightText } })) {
+                if (TimeTrackerGUI.DrawButton(new Rect(dbx, sy, dw, 18), dl, fontSize: 9)) {
                     DateTime.TryParse(newTaskDueDate, out var cur);
                     if (cur == default) cur = DateTime.Today;
                     newTaskDueDate = cur.AddDays(dd).ToString("yyyy-MM-dd");
@@ -913,12 +901,17 @@ void DrawTopBar(float pad, ref float y, float trackW)
             float tagX = mx + 16f;
             foreach (var tag in board.tags) {
                 bool  active  = ui.lastTagId == tag.id;
-                Color chipBg  = active ? tag.GetColor() : TimeTrackerGUI.BgDark;
-                Color chipTxt = active ? TimeTrackerGUI.BgColor : BrightText;
                 float chipW   = Mathf.Max(44f, tag.label.Length * 7f + 12f);
                 if (tagX + chipW > mx + mw - 16f) { tagX = mx + 16f; sy += 24f; }
-                Rect cr = new Rect(tagX, sy, chipW, 18);
+                Rect  cr      = new Rect(tagX, sy, chipW, 18);
+                bool  hov     = cr.Contains(Event.current.mousePosition);
+                Color chipBg  = active ? tag.GetColor()
+                              : hov    ? TimeTrackerGUI.U_BG_LIGHT
+                                       : TimeTrackerGUI.U_BG_MID;
+                Color chipTxt = active ? TimeTrackerGUI.BgColor : TimeTrackerGUI.BrightColor;
                 EditorGUI.DrawRect(cr, chipBg);
+                EditorGUI.DrawRect(new Rect(cr.x, cr.y,              cr.width, 1), TimeTrackerGUI.U_BORDER_HI);
+                EditorGUI.DrawRect(new Rect(cr.x, cr.y + cr.height-1, cr.width, 1), TimeTrackerGUI.U_BORDER);
                 GUI.Label(cr, tag.label,
                     TimeTrackerGUI.Style(9, chipTxt, anchor: TextAnchor.MiddleCenter));
                 var cap = tag;
@@ -931,14 +924,11 @@ void DrawTopBar(float pad, ref float y, float trackW)
             sy += 28f;
 
             // Create button (full width)
-            bool  canCreate = !string.IsNullOrWhiteSpace(newTaskTitle);
-            Color createBg  = canCreate ? TimeTrackerGUI.AccentColor : TimeTrackerGUI.BgDark;
-            Color createTxt = canCreate ? TimeTrackerGUI.BgColor     : TimeTrackerGUI.LabelColor;
-            Rect  createR   = new Rect(mx + 16, sy, mw - 32, 28);
-            EditorGUI.DrawRect(createR, createBg);
-            GUI.Label(createR, "Create Task",
-                TimeTrackerGUI.Style(12, createTxt, FontStyle.Bold, TextAnchor.MiddleCenter));
-            if (canCreate && GUI.Button(createR, GUIContent.none, GUIStyle.none)) {
+            bool canCreate = !string.IsNullOrWhiteSpace(newTaskTitle);
+            Rect createR   = new Rect(mx + 16, sy, mw - 32, 28);
+            if (TimeTrackerGUI.DrawButton(createR, "Create Task", fontSize: 12,
+                    bgColor:   canCreate ? TimeTrackerGUI.AccentColor : (Color?)null,
+                    textColor: canCreate ? null : TimeTrackerGUI.LabelColor) && canCreate) {
                 var task = TaskManagerCore.CreateTask(board, newTaskTitle.Trim(),
                     TaskStatus.TODO, ui.lastTagId);
                 task.dueDate        = newTaskDueDate;
@@ -965,9 +955,8 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 newTagLabel, new GUIStyle(EditorStyles.textField) { fontSize = 11 });
             newTagColor = EditorGUI.ColorField(new Rect(pad + 180, y + 6, 40, 18), newTagColor);
 
-            if (GUI.Button(new Rect(pad + 226, y + 5, 50, 20), "Create",
-                    new GUIStyle(EditorStyles.miniButton) {
-                        fontSize = 10, normal = { textColor = TimeTrackerGUI.AccentColor } })) {
+            if (TimeTrackerGUI.DrawButton(new Rect(pad + 226, y + 5, 50, 20), "Create",
+                    fontSize: 10, bgColor: TimeTrackerGUI.AccentColor)) {
                 if (!string.IsNullOrWhiteSpace(newTagLabel)) {
                     var tag = TaskManagerCore.CreateTag(board, newTagLabel.Trim(), newTagColor);
                     TaskManagerCore.UIState.lastTagId = tag.id;
@@ -975,9 +964,7 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 }
                 isCreatingTag = false;
             }
-            if (GUI.Button(new Rect(pad + 282, y + 5, 44, 20), "Cancel",
-                    new GUIStyle(EditorStyles.miniButton) {
-                        fontSize = 10, normal = { textColor = TimeTrackerGUI.LabelColor } }))
+            if (TimeTrackerGUI.DrawButton(new Rect(pad + 282, y + 5, 44, 20), "Cancel", fontSize: 10))
                 isCreatingTag = false;
 
             y += 38f;
@@ -995,18 +982,15 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 newStatusLabel, new GUIStyle(EditorStyles.textField) { fontSize = 11 });
             newStatusColor = EditorGUI.ColorField(new Rect(pad + 198, y + 6, 40, 18), newStatusColor);
 
-            if (GUI.Button(new Rect(pad + 244, y + 5, 50, 20), "Create",
-                    new GUIStyle(EditorStyles.miniButton) {
-                        fontSize = 10, normal = { textColor = TimeTrackerGUI.AccentColor } })) {
+            if (TimeTrackerGUI.DrawButton(new Rect(pad + 244, y + 5, 50, 20), "Create",
+                    fontSize: 10, bgColor: TimeTrackerGUI.AccentColor)) {
                 if (!string.IsNullOrWhiteSpace(newStatusLabel)) {
                     TaskManagerCore.CreateStatus(board, newStatusLabel.Trim(), newStatusColor);
                     Save();
                 }
                 isCreatingStatus = false;
             }
-            if (GUI.Button(new Rect(pad + 300, y + 5, 44, 20), "Cancel",
-                    new GUIStyle(EditorStyles.miniButton) {
-                        fontSize = 10, normal = { textColor = TimeTrackerGUI.LabelColor } }))
+            if (TimeTrackerGUI.DrawButton(new Rect(pad + 300, y + 5, 44, 20), "Cancel", fontSize: 10))
                 isCreatingStatus = false;
 
             y += 38f;
@@ -1084,18 +1068,15 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 newTagColor  = EditorGUI.ColorField(new Rect(0, sy, 40, 20), newTagColor);
                 newTagLabel  = EditorGUI.TextField(new Rect(48, sy, cw - 140, 20),
                     newTagLabel, new GUIStyle(EditorStyles.textField) { fontSize = 11 });
-                if (GUI.Button(new Rect(cw - 86, sy, 40, 20), "Add",
-                        new GUIStyle(EditorStyles.miniButton) {
-                            fontSize = 10, normal = { textColor = TimeTrackerGUI.AccentColor } })) {
+                if (TimeTrackerGUI.DrawButton(new Rect(cw - 86, sy, 40, 20), "Add",
+                        fontSize: 10, bgColor: TimeTrackerGUI.AccentColor)) {
                     if (!string.IsNullOrWhiteSpace(newTagLabel)) {
                         TaskManagerCore.CreateTag(board, newTagLabel.Trim(), newTagColor);
                         Save();
                     }
                     isCreatingTag = false;
                 }
-                if (GUI.Button(new Rect(cw - 42, sy, 42, 20), "Cancel",
-                        new GUIStyle(EditorStyles.miniButton) {
-                            fontSize = 9, normal = { textColor = TimeTrackerGUI.LabelColor } }))
+                if (TimeTrackerGUI.DrawButton(new Rect(cw - 42, sy, 42, 20), "Cancel", fontSize: 9))
                     isCreatingTag = false;
                 sy += 28f;
             }
@@ -1126,10 +1107,7 @@ void DrawTopBar(float pad, ref float y, float trackW)
 
                 if (!isBuiltin) {
                     Rect delR = new Rect(cw - 44, sy, 44, 20);
-                    EditorGUI.DrawRect(delR, new Color(0.75f, 0.15f, 0.15f, 1f));
-                    GUI.Label(delR, "✕ Del",
-                        TimeTrackerGUI.Style(9, Color.white, anchor: TextAnchor.MiddleCenter));
-                    if (GUI.Button(delR, GUIContent.none, GUIStyle.none))
+                    if (TimeTrackerGUI.DrawDangerButton(delR, "✕ Del", fontSize: 9))
                         statusToDelete = st;
                 } else {
                     GUI.Label(new Rect(cw - 52, sy + 2, 52, 16), "built-in",
@@ -1159,42 +1137,60 @@ void DrawTopBar(float pad, ref float y, float trackW)
 
         void DrawFilterChip(ref float x, float y, string label, Color? col, bool active,
                 System.Action onClick) {
-            float w = Mathf.Max(36f, label.Length * 7f + 14f);
-            Rect  r = new Rect(x, y, w, 22);
+            float w   = Mathf.Max(36f, label.Length * 7f + 14f);
+            Rect  r   = new Rect(x, y, w, 22);
+            bool  hov = r.Contains(Event.current.mousePosition);
 
-            Color bg  = active ? (col.HasValue ? col.Value : Color.white) : TimeTrackerGUI.BgDark;
-            Color txt = active ? TimeTrackerGUI.BgColor : BrightText;
-
-            EditorGUI.DrawRect(r, bg);
-            if (col.HasValue && !active) {
-                EditorGUI.DrawRect(new Rect(x + 5, y + 8, 6, 6), col.Value);
-                GUI.Label(new Rect(x + 14, y + 3, w - 18, 16), label,
-                    TimeTrackerGUI.Style(9, txt));
+            if (active) {
+                Color bg = col.HasValue ? col.Value : TimeTrackerGUI.AccentColor;
+                if (hov) bg = new Color(Mathf.Min(bg.r+0.08f,1f), Mathf.Min(bg.g+0.08f,1f), Mathf.Min(bg.b+0.08f,1f), 1f);
+                EditorGUI.DrawRect(r, bg);
+                EditorGUI.DrawRect(new Rect(r.x, r.y,            r.width, 1), new Color(1f,1f,1f,0.2f));
+                EditorGUI.DrawRect(new Rect(r.x, r.y+r.height-1, r.width, 1), TimeTrackerGUI.U_BORDER);
+                GUI.Label(r, label, TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor, FontStyle.Bold, TextAnchor.MiddleCenter));
+                if (GUI.Button(r, GUIContent.none, GUIStyle.none)) onClick?.Invoke();
             } else {
-                GUI.Label(r, label, TimeTrackerGUI.Style(9, txt, anchor: TextAnchor.MiddleCenter));
+                Color bg = hov ? TimeTrackerGUI.U_BG_LIGHT : TimeTrackerGUI.U_BG_MID;
+                EditorGUI.DrawRect(r, bg);
+                EditorGUI.DrawRect(new Rect(r.x,          r.y,            r.width, 1), TimeTrackerGUI.U_BORDER_HI);
+                EditorGUI.DrawRect(new Rect(r.x,          r.y+r.height-1, r.width, 1), TimeTrackerGUI.U_BORDER);
+                EditorGUI.DrawRect(new Rect(r.x,          r.y,            1, r.height), TimeTrackerGUI.U_BORDER_HI);
+                EditorGUI.DrawRect(new Rect(r.x+r.width-1,r.y,            1, r.height), TimeTrackerGUI.U_BORDER);
+                if (col.HasValue) {
+                    EditorGUI.DrawRect(new Rect(x + 6, y + 8, 6, 6), col.Value);
+                    GUI.Label(new Rect(x + 15, y + 3, w - 18, 16), label,
+                        TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor));
+                } else {
+                    GUI.Label(r, label, TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor, anchor: TextAnchor.MiddleCenter));
+                }
+                if (GUI.Button(r, GUIContent.none, GUIStyle.none)) onClick?.Invoke();
             }
-            if (GUI.Button(r, GUIContent.none, GUIStyle.none)) onClick?.Invoke();
+
             x += w + 5f;
         }
 
         bool DrawSmallButton(ref float x, float y, string label) {
             float w = label.Length * 7f + 14f;
             Rect  r = new Rect(x, y + 1, w, 20);
-            EditorGUI.DrawRect(r, TimeTrackerGUI.BgDark);
-            GUI.Label(r, label, TimeTrackerGUI.Style(9, BrightText, anchor: TextAnchor.MiddleCenter));
-            bool clicked = GUI.Button(r, GUIContent.none, GUIStyle.none);
+            bool clicked = TimeTrackerGUI.DrawButton(r, label, fontSize: 9);
             x += w + 6f;
             return clicked;
         }
 
         void DrawInlineTagChip(ref float x, float y, TaskTag tag) {
-            float w  = Mathf.Max(34f, tag.label.Length * 6f + 8f);
-            Rect  r  = new Rect(x, y, w, TAG_CHIP_H);
-            Color bg = tag.GetColor();
-            EditorGUI.DrawRect(r, new Color(bg.r, bg.g, bg.b, 0.28f));
+            float w   = Mathf.Max(34f, tag.label.Length * 6f + 10f);
+            Rect  r   = new Rect(x, y, w, TAG_CHIP_H);
+            Color bg  = tag.GetColor();
+            Color fill = new Color(
+                Mathf.Lerp(TimeTrackerGUI.U_BG_MID.r, bg.r, 0.22f),
+                Mathf.Lerp(TimeTrackerGUI.U_BG_MID.g, bg.g, 0.22f),
+                Mathf.Lerp(TimeTrackerGUI.U_BG_MID.b, bg.b, 0.22f), 1f);
+            EditorGUI.DrawRect(r, fill);
             EditorGUI.DrawRect(new Rect(r.x, r.y, 2, r.height), bg);
+            EditorGUI.DrawRect(new Rect(r.x, r.y,              r.width, 1), TimeTrackerGUI.U_BORDER);
+            EditorGUI.DrawRect(new Rect(r.x, r.y + r.height-1, r.width, 1), TimeTrackerGUI.U_BORDER_HI);
             GUI.Label(new Rect(r.x + 5, r.y, r.width - 5, r.height), tag.label,
-                TimeTrackerGUI.Style(8, TimeTrackerGUI.TextColor));
+                TimeTrackerGUI.Style(8, TimeTrackerGUI.BrightColor));
             x += w + 4f;
         }
 
