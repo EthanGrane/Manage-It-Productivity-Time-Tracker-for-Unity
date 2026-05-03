@@ -64,6 +64,22 @@ namespace UnityTimeTracker {
         // key: guid → preview texture from AssetPreview
         readonly Dictionary<string, Texture2D>    _assetPreviewCache = new Dictionary<string, Texture2D>();
 
+        // key: task.id → screenshot Texture2D loaded from asset
+        readonly Dictionary<string, Texture2D>    _screenshotCache   = new Dictionary<string, Texture2D>();
+
+        // ── Paint mode state ──────────────────────────────────────────────────
+        bool        _paintMode        = false;
+        Texture2D   _paintTex         = null;   // working copy being painted on
+        bool        _paintDirty       = false;  // unsaved changes
+        Vector2     _lastPaintPos     = Vector2.zero;
+        bool        _wasPainting      = false;
+
+        // Undo stack — each entry is a Color[] snapshot of _paintTex pixels
+        readonly Stack<Color[]> _undoStack = new Stack<Color[]>();
+        const int PAINT_UNDO_LIMIT = 20;
+        const int PAINT_BRUSH_RADIUS = 4;       // pixels on the actual texture
+        static readonly Color PAINT_COLOR = new Color(1f, 0.12f, 0.12f, 1f);  // red
+
 
         static readonly Regex UrlRegex = new Regex(
             @"https?://[^\s""'<>]+", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -381,6 +397,7 @@ namespace UnityTimeTracker {
             string url = ExtractUrl(task.description);
             if (!string.IsNullOrEmpty(url)) return true;
             if (task.assetRefs != null && task.assetRefs.Count > 0) return true;
+            if (!string.IsNullOrEmpty(task.screenshotGuid)) return true;
             return false;
         }
 
@@ -496,6 +513,19 @@ namespace UnityTimeTracker {
                             Selection.activeObject = obj;
                         }
                     }
+                } else if (!string.IsNullOrEmpty(task.screenshotGuid)) {
+                    // Screenshot thumbnail
+                    var shotPreview = GetScreenshotTexture(task);
+                    if (shotPreview != null) {
+                        GUI.DrawTexture(imgRect, shotPreview, ScaleMode.ScaleAndCrop);
+                        // Small 📷 badge bottom-right
+                        Rect badge = new Rect(imgRect.xMax - 14f, imgRect.yMax - 14f, 14f, 14f);
+                        EditorGUI.DrawRect(badge, new Color(0f, 0f, 0f, 0.55f));
+                        GUI.Label(badge, "📷", TimeTrackerGUI.Style(7, Color.white,
+                            anchor: TextAnchor.MiddleCenter));
+                    } else {
+                        DrawMediaPlaceholder(imgRect, "📷");
+                    }
                 }
             }
 
@@ -605,6 +635,167 @@ namespace UnityTimeTracker {
             GUI.Label(r, icon, TimeTrackerGUI.Style(18, BrightText, anchor: TextAnchor.MiddleCenter));
         }
 
+        // ── Screenshot helpers ────────────────────────────────────────────────
+
+        /// <summary>
+        /// Captures the active SceneView camera and saves the result as a PNG
+        /// asset under Assets/TaskScreenshots/. Returns the new asset GUID.
+        /// </summary>
+
+        // ── Paint mode helpers ────────────────────────────────────────────────
+
+        void EnterPaintMode(Texture2D source) {
+            // Make a writable ARGB32 copy so we can SetPixels on it
+            _paintTex = new Texture2D(source.width, source.height, TextureFormat.ARGB32, false);
+            _paintTex.SetPixels(source.GetPixels());
+            _paintTex.Apply();
+            _undoStack.Clear();
+            _paintDirty  = false;
+            _wasPainting = false;
+            _paintMode   = true;
+        }
+
+        void ExitPaintMode(bool discard) {
+            _paintMode = false;
+            if (discard && _paintTex != null)
+                UnityEngine.Object.DestroyImmediate(_paintTex);
+            _paintTex  = null;
+            _undoStack.Clear();
+            _paintDirty = false;
+        }
+
+        void PushUndo() {
+            if (_paintTex == null) return;
+            _undoStack.Push(_paintTex.GetPixels());
+            while (_undoStack.Count > PAINT_UNDO_LIMIT) {
+                var arr = _undoStack.ToArray();
+                _undoStack.Clear();
+                for (int i = 0; i < PAINT_UNDO_LIMIT; i++)
+                    _undoStack.Push(arr[i]);
+            }
+        }
+
+        void PaintUndo() {
+            if (_undoStack.Count == 0 || _paintTex == null) return;
+            _paintTex.SetPixels(_undoStack.Pop());
+            _paintTex.Apply();
+            _paintDirty = true;
+        }
+
+        void PaintBrush(Texture2D tex, int cx, int cy) {
+            int r = PAINT_BRUSH_RADIUS;
+            int x0 = Mathf.Max(0, cx - r), x1 = Mathf.Min(tex.width  - 1, cx + r);
+            int y0 = Mathf.Max(0, cy - r), y1 = Mathf.Min(tex.height - 1, cy + r);
+            for (int x = x0; x <= x1; x++)
+                for (int y = y0; y <= y1; y++)
+                    if ((x - cx) * (x - cx) + (y - cy) * (y - cy) <= r * r)
+                        tex.SetPixel(x, y, PAINT_COLOR);
+        }
+
+        void PaintLine(Texture2D tex, Vector2 from, Vector2 to) {
+            float dist = Vector2.Distance(from, to);
+            int   steps = Mathf.Max(1, Mathf.CeilToInt(dist));
+            for (int i = 0; i <= steps; i++) {
+                float t  = i / (float)steps;
+                int   px = Mathf.RoundToInt(Mathf.Lerp(from.x, to.x, t));
+                int   py = Mathf.RoundToInt(Mathf.Lerp(from.y, to.y, t));
+                PaintBrush(tex, px, py);
+            }
+        }
+
+        void SavePaintedScreenshot(TrackerTask task) {
+            if (_paintTex == null || string.IsNullOrEmpty(task.screenshotGuid)) return;
+            string assetPath = AssetDatabase.GUIDToAssetPath(task.screenshotGuid);
+            if (string.IsNullOrEmpty(assetPath)) return;
+
+            string fullPath = Path.GetFullPath(
+                Path.Combine(Application.dataPath, "..", assetPath));
+            File.WriteAllBytes(fullPath, _paintTex.EncodeToPNG());
+
+            AssetDatabase.ImportAsset(assetPath,
+                ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+
+            _screenshotCache.Remove(task.id);
+            var reloaded = AssetDatabase.LoadAssetAtPath<Texture2D>(assetPath);
+            if (reloaded != null) _screenshotCache[task.id] = reloaded;
+
+            ExitPaintMode(discard: false);
+            repaint?.Invoke();
+        }
+
+        string CaptureViewportScreenshot(string taskId) {
+            SceneView sv = SceneView.lastActiveSceneView;
+            if (sv == null) {
+                Debug.LogWarning("[TimeTracker] No active Scene View to capture.");
+                return null;
+            }
+
+            const string folder = "Assets/TaskScreenshots";
+            if (!AssetDatabase.IsValidFolder(folder))
+                AssetDatabase.CreateFolder("Assets", "TaskScreenshots");
+
+            Camera cam = sv.camera;
+            int w = Mathf.Max(1, (int)sv.position.width);
+            int h = Mathf.Max(1, (int)sv.position.height);
+
+            var rt   = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32);
+            var prev = cam.targetTexture;
+            cam.targetTexture = rt;
+            cam.Render();
+            cam.targetTexture = prev;
+
+            RenderTexture.active = rt;
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+            tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+            tex.Apply();
+            RenderTexture.active = null;
+            UnityEngine.Object.DestroyImmediate(rt);
+
+            byte[] png = tex.EncodeToPNG();
+            UnityEngine.Object.DestroyImmediate(tex);
+
+            string fileName  = $"task_{taskId}_{DateTime.Now:yyyyMMdd_HHmmss}.png";
+            string assetPath = $"{folder}/{fileName}";
+            string fullPath  = Path.GetFullPath(
+                Path.Combine(Application.dataPath, "..", assetPath));
+            File.WriteAllBytes(fullPath, png);
+
+            AssetDatabase.ImportAsset(assetPath,
+                ImportAssetOptions.ForceUpdate | ImportAssetOptions.ForceSynchronousImport);
+
+            var importer = AssetImporter.GetAtPath(assetPath) as TextureImporter;
+            if (importer != null) {
+                importer.textureType        = TextureImporterType.GUI;
+                importer.mipmapEnabled      = false;
+                importer.isReadable         = true;
+                importer.maxTextureSize     = 2048;
+                importer.textureCompression = TextureImporterCompression.Uncompressed;
+                importer.SaveAndReimport();
+            }
+
+            return AssetDatabase.AssetPathToGUID(assetPath);
+        }
+
+        /// <summary>
+        /// Returns (and caches) the Texture2D for a task's screenshotGuid.
+        /// Invalidates cache if the stored GUID changed.
+        /// </summary>
+        Texture2D GetScreenshotTexture(TrackerTask task) {
+            if (string.IsNullOrEmpty(task.screenshotGuid)) return null;
+
+            // If cache key exists but is stale (guid changed), remove it
+            if (_screenshotCache.TryGetValue(task.id, out var cached)) {
+                if (cached != null) return cached;
+                _screenshotCache.Remove(task.id);
+            }
+
+            string path = AssetDatabase.GUIDToAssetPath(task.screenshotGuid);
+            if (string.IsNullOrEmpty(path)) return null;
+            var t = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (t != null) _screenshotCache[task.id] = t;
+            return t;
+        }
+
         // ── Task detail ───────────────────────────────────────────────────────
 
         void DrawTaskDetail(float pad, ref float y, float trackW, float scrollH) {
@@ -612,7 +803,7 @@ namespace UnityTimeTracker {
 
             // ‹ back
             if (TimeTrackerGUI.DrawButton(new Rect(pad, y, 22, 22), "‹", fontSize: 14)) {
-                Save(); editingTask = null; repaint?.Invoke(); return;
+                ExitPaintMode(discard: true); Save(); editingTask = null; repaint?.Invoke(); return;
             }
 
             GUI.Label(new Rect(pad + 30, y + 3, trackW - 130, 18), "TASK DETAIL",
@@ -622,7 +813,7 @@ namespace UnityTimeTracker {
             Rect delR = new Rect(pad + trackW - 72, y, 72, 22);
             if (TimeTrackerGUI.DrawDangerButton(delR, "🗑 Delete", fontSize: 10)) {
                 TaskManagerCore.DeleteTask(board, editingTask);
-                Save(); editingTask = null; repaint?.Invoke(); return;
+                ExitPaintMode(discard: true); Save(); editingTask = null; repaint?.Invoke(); return;
             }
 
             y += 32f;
@@ -630,7 +821,7 @@ namespace UnityTimeTracker {
             y += 10f;
 
             Rect scrollRect = new Rect(pad, y, trackW, scrollH);
-            Rect content    = new Rect(0, 0, trackW - 16f, 900f);
+            Rect content    = new Rect(0, 0, trackW - 16f, 1200f);
             detailScroll    = GUI.BeginScrollView(scrollRect, detailScroll, content);
 
             float sy = 0f;
@@ -809,6 +1000,187 @@ namespace UnityTimeTracker {
                 }
                 sy += 4f;
             }
+
+            // ── Viewport Screenshot ───────────────────────────────────────────
+            EditorGUI.DrawRect(new Rect(0, sy, cw, 1), TimeTrackerGUI.DivColor); sy += 10f;
+            SectionLabel(0, sy, "VIEWPORT SCREENSHOT"); sy += 18f;
+
+            Texture2D shotTex  = _paintMode && _paintTex != null
+                                 ? _paintTex
+                                 : GetScreenshotTexture(editingTask);
+            bool      hasSshot = shotTex != null || !string.IsNullOrEmpty(editingTask.screenshotGuid);
+
+            // ── Toolbar row ───────────────────────────────────────────────────
+            float tbx = 0f;
+
+            if (!_paintMode) {
+                // Capture
+                float capW = 152f;
+                if (TimeTrackerGUI.DrawButton(new Rect(tbx, sy, capW, 22),
+                        "📷 Capture Scene View", fontSize: 10,
+                        bgColor: TimeTrackerGUI.AccentColor)) {
+                    ExitPaintMode(discard: true);
+                    if (!string.IsNullOrEmpty(editingTask.screenshotGuid)) {
+                        string op2 = AssetDatabase.GUIDToAssetPath(editingTask.screenshotGuid);
+                        if (!string.IsNullOrEmpty(op2)) AssetDatabase.DeleteAsset(op2);
+                        _screenshotCache.Remove(editingTask.id);
+                        editingTask.screenshotGuid = null; Save();
+                    }
+                    string newGuid = CaptureViewportScreenshot(editingTask.id);
+                    if (!string.IsNullOrEmpty(newGuid)) {
+                        editingTask.screenshotGuid = newGuid;
+                        _screenshotCache.Remove(editingTask.id);
+                        Save(); repaint?.Invoke();
+                    }
+                }
+                tbx += capW + 6f;
+
+                if (shotTex != null) {
+                    if (TimeTrackerGUI.DrawButton(new Rect(tbx, sy, 80f, 22),
+                            "✏ Annotate", fontSize: 10,
+                            bgColor: new Color(0.25f, 0.55f, 0.25f, 1f))) {
+                        EnterPaintMode(shotTex);
+                    }
+                    tbx += 86f;
+
+                    if (TimeTrackerGUI.DrawDangerButton(new Rect(tbx, sy, 62f, 22),
+                            "✕ Clear", fontSize: 9)) {
+                        string oldPath = AssetDatabase.GUIDToAssetPath(editingTask.screenshotGuid);
+                        if (!string.IsNullOrEmpty(oldPath)) AssetDatabase.DeleteAsset(oldPath);
+                        _screenshotCache.Remove(editingTask.id);
+                        editingTask.screenshotGuid = null;
+                        Save(); repaint?.Invoke();
+                        hasSshot = false; shotTex = null;
+                    }
+                }
+            } else {
+                // ── Paint mode toolbar ────────────────────────────────────────
+                bool canUndo = _undoStack.Count > 0;
+                Color undoCol = canUndo
+                    ? new Color(0.30f, 0.45f, 0.75f, 1f)
+                    : TimeTrackerGUI.U_BG_MID;
+                if (TimeTrackerGUI.DrawButton(new Rect(tbx, sy, 60f, 22),
+                        "↩ Undo", fontSize: 10, bgColor: undoCol) && canUndo) {
+                    PaintUndo(); repaint?.Invoke();
+                }
+                tbx += 66f;
+
+                Color saveCol = _paintDirty
+                    ? new Color(0.20f, 0.65f, 0.30f, 1f)
+                    : TimeTrackerGUI.U_BG_MID;
+                if (TimeTrackerGUI.DrawButton(new Rect(tbx, sy, 62f, 22),
+                        "💾 Save", fontSize: 10, bgColor: saveCol)) {
+                    SavePaintedScreenshot(editingTask);
+                }
+                tbx += 68f;
+
+                if (TimeTrackerGUI.DrawDangerButton(new Rect(tbx, sy, 68f, 22),
+                        "✕ Discard", fontSize: 9)) {
+                    ExitPaintMode(discard: true);
+                    repaint?.Invoke();
+                }
+
+                GUI.Label(new Rect(tbx + 74f, sy + 4f, 140f, 16f),
+                    $"● {PAINT_BRUSH_RADIUS * 2}px  |  {_undoStack.Count} steps",
+                    TimeTrackerGUI.Style(9, TimeTrackerGUI.LabelColor));
+            }
+            sy += 28f;
+
+            // ── Preview / Paint canvas ────────────────────────────────────────
+            if (shotTex != null) {
+                float aspect = (float)shotTex.height / Mathf.Max(1, shotTex.width);
+                float prevW  = cw;
+                float prevH  = Mathf.Min(_paintMode ? 340f : 220f, prevW * aspect);
+                prevW        = prevH / Mathf.Max(0.001f, aspect);
+                Rect  prevR  = new Rect(0f, sy, prevW, prevH);
+
+                Color borderCol = _paintMode
+                    ? new Color(0.85f, 0.15f, 0.15f, 1f)
+                    : TimeTrackerGUI.DivColor;
+                int bord = _paintMode ? 2 : 1;
+                EditorGUI.DrawRect(
+                    new Rect(prevR.x - bord, prevR.y - bord,
+                             prevR.width + bord * 2, prevR.height + bord * 2),
+                    borderCol);
+                GUI.DrawTexture(prevR, shotTex, ScaleMode.ScaleToFit);
+
+                if (_paintMode && _paintTex != null && evt.type != EventType.Layout) {
+                    EditorGUIUtility.AddCursorRect(prevR, MouseCursor.CustomCursor);
+                    bool inCanvas = prevR.Contains(evt.mousePosition);
+
+                    if (inCanvas &&
+                        (evt.type == EventType.MouseDown || evt.type == EventType.MouseDrag) &&
+                        evt.button == 0) {
+
+                        // Compute actual drawn rect inside prevR (ScaleToFit keeps aspect)
+                        float canvasAspect = prevW / Mathf.Max(1f, prevH);
+                        float texAspect    = (float)_paintTex.width / Mathf.Max(1, _paintTex.height);
+                        float drawnW, drawnH, offX, offY;
+                        if (texAspect > canvasAspect) {
+                            drawnW = prevW; drawnH = prevW / texAspect;
+                            offX = 0f;     offY = (prevH - drawnH) * 0.5f;
+                        } else {
+                            drawnH = prevH; drawnW = prevH * texAspect;
+                            offX = (prevW - drawnW) * 0.5f; offY = 0f;
+                        }
+
+                        float relX = (evt.mousePosition.x - prevR.x - offX) / Mathf.Max(1f, drawnW);
+                        float relY = (evt.mousePosition.y - prevR.y - offY) / Mathf.Max(1f, drawnH);
+                        int tx2 = Mathf.Clamp(Mathf.RoundToInt(relX * _paintTex.width),  0, _paintTex.width  - 1);
+                        int ty2 = Mathf.Clamp(Mathf.RoundToInt((1f - relY) * _paintTex.height), 0, _paintTex.height - 1);
+
+                        if (evt.type == EventType.MouseDown) {
+                            PushUndo();
+                            _wasPainting  = true;
+                            _lastPaintPos = new Vector2(tx2, ty2);
+                            PaintBrush(_paintTex, tx2, ty2);
+                        } else if (_wasPainting) {
+                            PaintLine(_paintTex, _lastPaintPos, new Vector2(tx2, ty2));
+                            _lastPaintPos = new Vector2(tx2, ty2);
+                        }
+
+                        _paintTex.Apply();
+                        _paintDirty = true;
+                        evt.Use();
+                        repaint?.Invoke();
+
+                    } else if (evt.type == EventType.MouseUp) {
+                        _wasPainting = false;
+                    }
+
+                    // Ctrl+Z
+                    if (evt.type == EventType.KeyDown &&
+                        evt.keyCode == KeyCode.Z &&
+                        (evt.control || evt.command) &&
+                        _undoStack.Count > 0) {
+                        PaintUndo();
+                        evt.Use();
+                        repaint?.Invoke();
+                    }
+                }
+
+                sy += prevH + 6f;
+
+                if (!_paintMode) {
+                    string shotPath2  = AssetDatabase.GUIDToAssetPath(editingTask.screenshotGuid);
+                    string shortName2 = string.IsNullOrEmpty(shotPath2) ? "" :
+                        System.IO.Path.GetFileName(shotPath2);
+                    GUI.Label(new Rect(0, sy, cw, 14), shortName2,
+                        TimeTrackerGUI.Style(8, TimeTrackerGUI.LabelColor));
+                } else {
+                    GUI.Label(new Rect(0, sy, cw, 14),
+                        "Paint with left mouse  •  Ctrl+Z to undo  •  Save when done",
+                        TimeTrackerGUI.Style(8, new Color(1f, 0.55f, 0.55f, 1f)));
+                }
+                sy += 18f;
+            } else {
+                GUI.Label(new Rect(0, sy, cw, 14),
+                    "No screenshot — click Capture to take one",
+                    TimeTrackerGUI.Style(9, TimeTrackerGUI.LabelColor));
+                sy += 18f;
+            }
+
+            sy += 4f;
 
             // Footer
             EditorGUI.DrawRect(new Rect(0, sy, cw, 1), TimeTrackerGUI.DivColor); sy += 10f;
@@ -1208,5 +1580,6 @@ namespace UnityTimeTracker {
         public List<TrackerTask> GetTasksDueToday() => TaskManagerCore.GetTasksDueToday(board);
         public List<TrackerTask> GetWorkingOn()      => TaskManagerCore.GetWorkingOn(board);
         public TaskBoardData     Board               => board;
+
     }
 }

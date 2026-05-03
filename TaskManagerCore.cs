@@ -61,6 +61,7 @@ namespace UnityTimeTracker {
         public string       completedAt;
         public int          order;
         public List<TaskAssetRef> assetRefs = new List<TaskAssetRef>(); // dropped assets
+        public string       screenshotGuid; // GUID of screenshot asset in TaskScreenshots/
 
         // Derived helpers (not serialized)
         public bool HasDueDate => !string.IsNullOrEmpty(dueDate);
