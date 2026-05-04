@@ -1506,7 +1506,6 @@ namespace UnityTimeTracker {
             
             
             double colBrightness =  col.HasValue ? (col.Value.r + col.Value.g + col.Value.b + 0.001) / 3f : 0;
-            Debug.Log(colBrightness);
 
             if (active) {
                 Color bg = col.HasValue ? col.Value : TimeTrackerGUI.AccentColor;
