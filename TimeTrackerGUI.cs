@@ -34,6 +34,7 @@ namespace UnityTimeTracker {
         public static Color TickColor    => new Color(1f, 1f, 1f, 0.10f);
         public static Color LabelColor   => U_TEXT_DIM;    // secondary / caption
         public static Color TextColor    => U_TEXT;        // normal body text
+        public static Color DarkTextColor    => U_BORDER;        // normal body text
         public static Color BrightColor  => U_TEXT_BRIGHT; // headers, selected labels
         public static Color MutedColor   => U_TEXT_MUTED;  // disabled / placeholder
         public static Color AccentColor  => T.GetAccent();
@@ -48,33 +49,61 @@ namespace UnityTimeTracker {
                 normal    = { textColor = color }
             };
 
-        // ── Unity-style button drawing ────────────────────────────────
-        // Draws a button that looks like a real Unity miniButton.
-        // Returns true if clicked.
+        // ── Button theme accessors ────────────────────────────────────
+        public static Color BtnPrimaryBg     => T.GetBtnPrimaryBg();
+        public static Color BtnPrimaryText   => T.GetBtnPrimaryText();
+        public static Color BtnSecondaryBg   => T.GetBtnSecondaryBg();
+        public static Color BtnSecondaryText => T.GetBtnSecondaryText();
+        public static Color BtnDangerBg      => T.GetBtnDangerBg();
+        public static Color BtnDangerText    => T.GetBtnDangerText();
+
+        // ── Button drawing — public API ───────────────────────────────
+        
+        /// <summary>Filled accent-colored button. Use for the main call-to-action.</summary>
+        public static bool DrawPrimaryButton(Rect r, string label, int fontSize = 10)
+            => DrawButtonCore(r, label, fontSize, BtnPrimaryBg, BtnPrimaryText);
+
+        /// <summary>Neutral background button. Use for secondary / cancel actions.</summary>
+        public static bool DrawSecondaryButton(Rect r, string label, int fontSize = 10, bool active = false) {
+            Color bg = active ? U_BG_LIGHT : BtnSecondaryBg;
+            return DrawButtonCore(r, label, fontSize, bg, BtnSecondaryText);
+        }
+
+        /// <summary>Red button. Use for destructive / irreversible actions.</summary>
+        public static bool DrawDangerButton(Rect r, string label, int fontSize = 10)
+            => DrawButtonCore(r, label, fontSize, BtnDangerBg, BtnDangerText);
+
+        // ── Legacy alias — kept for backwards compatibility ───────────
+        /// <summary>
+        /// Prefer DrawPrimaryButton / DrawSecondaryButton / DrawDangerButton.
+        /// This overload is kept so existing callers don't break.
+        /// </summary>
         public static bool DrawButton(Rect r, string label, int fontSize = 10,
-                Color? textColor = null, Color? bgColor = null, bool active = false) {
-            bool  hov = r.Contains(Event.current.mousePosition);
-            Color bg  = bgColor  ?? (active ? U_BG_LIGHT : U_BG_MID);
-            Color txt = textColor ?? (active ? U_TEXT_BRIGHT : U_TEXT);
+                bool active = false, bool primary = false) {
+            if (primary) return DrawPrimaryButton(r, label, fontSize);
+            return DrawSecondaryButton(r, label, fontSize, active);
+        }
+
+        // ── Private core renderer ─────────────────────────────────────
+        static bool DrawButtonCore(Rect r, string label, int fontSize, Color bg, Color txt, bool enabled = true) {
+            bool hov = r.Contains(Event.current.mousePosition);
 
             // Lighten bg on hover
             if (hov) bg = new Color(
                 Mathf.Min(bg.r + 0.08f, 1f),
                 Mathf.Min(bg.g + 0.08f, 1f),
                 Mathf.Min(bg.b + 0.08f, 1f), bg.a);
-            // Always keep text bright when a custom bgColor is provided (highlight button)
-            if (bgColor.HasValue) txt = U_TEXT_BRIGHT;
 
             // Body
             EditorGUI.DrawRect(r, bg);
-            // Top highlight (light edge)
-            EditorGUI.DrawRect(new Rect(r.x,              r.y,              r.width, 1), U_BORDER_HI);
+            // Top highlight
+            EditorGUI.DrawRect(new Rect(r.x,             r.y,             r.width, 1), U_BORDER_HI);
             // Bottom shadow
-            EditorGUI.DrawRect(new Rect(r.x,              r.y + r.height-1, r.width, 1), U_BORDER);
+            EditorGUI.DrawRect(new Rect(r.x,             r.y + r.height-1, r.width, 1), U_BORDER);
             // Left edge
-            EditorGUI.DrawRect(new Rect(r.x,              r.y,              1, r.height), U_BORDER_HI);
+            EditorGUI.DrawRect(new Rect(r.x,             r.y,             1, r.height), U_BORDER_HI);
             // Right edge
-            EditorGUI.DrawRect(new Rect(r.x + r.width-1,  r.y,              1, r.height), U_BORDER);
+            EditorGUI.DrawRect(new Rect(r.x + r.width-1, r.y,             1, r.height), U_BORDER);
 
             GUI.Label(r, label, new GUIStyle(EditorStyles.label) {
                 fontSize  = fontSize,
@@ -82,20 +111,6 @@ namespace UnityTimeTracker {
                 normal    = { textColor = txt }
             });
 
-            return GUI.Button(r, GUIContent.none, GUIStyle.none);
-        }
-
-        // Danger variant (red bg)
-        public static bool DrawDangerButton(Rect r, string label, int fontSize = 10) {
-            var dangerBg = new Color(0.55f, 0.13f, 0.13f, 1f);
-            EditorGUI.DrawRect(r, dangerBg);
-            EditorGUI.DrawRect(new Rect(r.x, r.y,              r.width, 1), new Color(0.7f, 0.2f, 0.2f, 1f));
-            EditorGUI.DrawRect(new Rect(r.x, r.y + r.height-1, r.width, 1), new Color(0.3f, 0.05f, 0.05f, 1f));
-            GUI.Label(r, label, new GUIStyle(EditorStyles.label) {
-                fontSize  = fontSize,
-                alignment = TextAnchor.MiddleCenter,
-                normal    = { textColor = new Color(0.95f, 0.75f, 0.75f, 1f) }
-            });
             return GUI.Button(r, GUIContent.none, GUIStyle.none);
         }
 

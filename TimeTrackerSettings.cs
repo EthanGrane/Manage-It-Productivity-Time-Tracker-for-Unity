@@ -30,6 +30,14 @@ namespace UnityTimeTracker {
         // Commit marker color
         public float[] commitColor  = { 0.9800f, 0.7600f, 0.2500f, 1.00f };
 
+        // Button colors
+        public float[] btnPrimaryBg      = { 0.15f, 0.351f, 1f,    1f };   // same as accent
+        public float[] btnPrimaryText    = { 1f,    1f,    1f,    1f };   // white
+        public float[] btnSecondaryBg    = { 0.2800f, 0.2800f, 0.2800f, 1f }; // card mid
+        public float[] btnSecondaryText  = { 0.8600f, 0.8600f, 0.8600f, 1f }; // normal text
+        public float[] btnDangerBg       = { 0.55f,  0.13f,  0.13f,  1f };
+        public float[] btnDangerText     = { 0.95f,  0.75f,  0.75f,  1f };
+
         // Icon style
         public int iconStyleIndex = 0;
 
@@ -72,6 +80,20 @@ namespace UnityTimeTracker {
         public void SetSun(Color c)      => Set(sunColor, c);
         public void SetSession(Color c)  => Set(sessionColor, c);
         public void SetCommit(Color c)   => Set(commitColor, c);
+
+        public Color GetBtnPrimaryBg()     => Arr(btnPrimaryBg);
+        public Color GetBtnPrimaryText()   => Arr(btnPrimaryText);
+        public Color GetBtnSecondaryBg()   => Arr(btnSecondaryBg);
+        public Color GetBtnSecondaryText() => Arr(btnSecondaryText);
+        public Color GetBtnDangerBg()      => Arr(btnDangerBg);
+        public Color GetBtnDangerText()    => Arr(btnDangerText);
+
+        public void SetBtnPrimaryBg(Color c)     => Set(btnPrimaryBg, c);
+        public void SetBtnPrimaryText(Color c)   => Set(btnPrimaryText, c);
+        public void SetBtnSecondaryBg(Color c)   => Set(btnSecondaryBg, c);
+        public void SetBtnSecondaryText(Color c) => Set(btnSecondaryText, c);
+        public void SetBtnDangerBg(Color c)      => Set(btnDangerBg, c);
+        public void SetBtnDangerText(Color c)    => Set(btnDangerText, c);
 
         static Color Arr(float[] a) => new Color(a[0], a[1], a[2], a[3]);
         static void  Set(float[] a, Color c) { a[0]=c.r; a[1]=c.g; a[2]=c.b; a[3]=c.a; }

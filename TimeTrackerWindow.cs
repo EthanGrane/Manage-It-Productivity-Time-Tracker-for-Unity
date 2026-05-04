@@ -855,7 +855,7 @@ namespace UnityTimeTracker {
             bool  changed = false;
 
             Rect scrollView = new Rect(pad, y, trackW, scrollH);
-            Rect content    = new Rect(0, 0, trackW - 16f, 1080f);
+            Rect content    = new Rect(0, 0, trackW - 16f, 1280f);
             settingsScroll  = GUI.BeginScrollView(scrollView, settingsScroll, content);
 
             float sy = 0f;
@@ -943,6 +943,32 @@ namespace UnityTimeTracker {
             changed |= ColorRow(0, ref sy, cw, "Background (dark)", theme.GetBgDark(),  c => theme.SetBgDark(c));
             changed |= ColorRow(0, ref sy, cw, "Text",              theme.GetText(),    c => theme.SetText(c));
             changed |= ColorRow(0, ref sy, cw, "Session bars",      theme.GetSession(), c => theme.SetSession(c));
+
+            sy += 8f;
+            DrawSettingsDivider(0, ref sy, cw);
+
+            DrawSettingsHeader(0, sy, cw, "BUTTON COLORS");
+            sy += 24f;
+
+            // Primary button preview
+            float prevBtnW = 90f;
+            float prevBtnX = cw - prevBtnW;
+
+            changed |= ColorRow(0, ref sy, cw, "Primary button — background",  theme.GetBtnPrimaryBg(),     c => theme.SetBtnPrimaryBg(c));
+            changed |= ColorRow(0, ref sy, cw, "Primary button — text",        theme.GetBtnPrimaryText(),   c => theme.SetBtnPrimaryText(c));
+            // live preview
+            TimeTrackerGUI.DrawButton(new Rect(prevBtnX, sy, prevBtnW, 22), "Primary", 10, primary: true);
+            sy += 30f;
+
+            changed |= ColorRow(0, ref sy, cw, "Secondary button — background", theme.GetBtnSecondaryBg(),   c => theme.SetBtnSecondaryBg(c));
+            changed |= ColorRow(0, ref sy, cw, "Secondary button — text",       theme.GetBtnSecondaryText(), c => theme.SetBtnSecondaryText(c));
+            TimeTrackerGUI.DrawButton(new Rect(prevBtnX, sy, prevBtnW, 22), "Secondary", 10);
+            sy += 30f;
+
+            changed |= ColorRow(0, ref sy, cw, "Danger button — background", theme.GetBtnDangerBg(),   c => theme.SetBtnDangerBg(c));
+            changed |= ColorRow(0, ref sy, cw, "Danger button — text",       theme.GetBtnDangerText(), c => theme.SetBtnDangerText(c));
+            TimeTrackerGUI.DrawDangerButton(new Rect(prevBtnX, sy, prevBtnW, 22), "Danger", 10);
+            sy += 30f;
 
             sy += 8f;
             DrawSettingsDivider(0, ref sy, cw);

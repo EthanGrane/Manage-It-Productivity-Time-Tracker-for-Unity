@@ -200,7 +200,7 @@ namespace UnityTimeTracker {
 
             // All chip
             bool allActive = string.IsNullOrEmpty(ui.activeFilterTag);
-            DrawFilterChip(ref tx, y, "All", null, allActive, () => {
+            DrawFilterChip(ref tx, y, "All", Color.white, allActive, () => {
                 ui.activeFilterTag = "";
                 TaskManagerCore.SaveUIState();
             });
@@ -243,7 +243,7 @@ namespace UnityTimeTracker {
             // + New Task
             float btnW = 92f;
             Rect  addR = new Rect(pad + trackW - 28f - 4f - btnW, y, btnW, 24f);
-            if (TimeTrackerGUI.DrawButton(addR, "+ New Task", fontSize: 11, bgColor: TimeTrackerGUI.AccentColor)) {
+            if (TimeTrackerGUI.DrawPrimaryButton(addR, "+ New Task", fontSize: 11)) {
                 isCreatingTask = true;
                 newTaskTitle   = "";
                 newTaskDueDate = DateTime.Today.ToString("yyyy-MM-dd");
@@ -253,9 +253,7 @@ namespace UnityTimeTracker {
             }
 
             Color gearTxt = showTaskSettings ? TimeTrackerGUI.AccentColor : TimeTrackerGUI.TextColor;
-            if (TimeTrackerGUI.DrawButton(gearR, "⚙", fontSize: 13,
-                    textColor: gearTxt,
-                    bgColor: showTaskSettings ? TimeTrackerGUI.U_BG_LIGHT : TimeTrackerGUI.U_BG_MID)) {
+            if (TimeTrackerGUI.DrawSecondaryButton(gearR, "⚙", fontSize: 13)) {
                 showTaskSettings = !showTaskSettings;
                 editingTask      = null;
             }
@@ -852,7 +850,6 @@ namespace UnityTimeTracker {
                 Rect r   = new Rect(i * (sbW + 6f), sy, sbW, 24);
                 Color stCol = GetStatusColor(st);
                 if (TimeTrackerGUI.DrawButton(r, st.label, fontSize: 10,
-                        bgColor: sel ? stCol : (Color?)null,
                         active: sel)) {
                     TaskManagerCore.MoveTask(board, editingTask, st.id); Save();
                 }
@@ -872,9 +869,7 @@ namespace UnityTimeTracker {
             foreach (var (dl, dd) in dateBtns) {
                 float dw  = dl.Length * 6.5f + 8f;
                 bool  isTd = dd == 0;
-                if (TimeTrackerGUI.DrawButton(new Rect(dbx, sy, dw, 18), dl, fontSize: 9,
-                        bgColor:   isTd ? TimeTrackerGUI.AccentColor : null,
-                        textColor: isTd ? TimeTrackerGUI.BrightColor : null)) {
+                if (TimeTrackerGUI.DrawButton(new Rect(dbx, sy, dw, 18), dl, fontSize: 9)) {
                     if (dd == 0) editingTask.dueDate = DateTime.Today.ToString("yyyy-MM-dd");
                     else {
                         DateTime.TryParse(editingTask.dueDate, out var cur);
@@ -1017,8 +1012,7 @@ namespace UnityTimeTracker {
                 // Capture
                 float capW = 152f;
                 if (TimeTrackerGUI.DrawButton(new Rect(tbx, sy, capW, 22),
-                        "📷 Capture Scene View", fontSize: 10,
-                        bgColor: TimeTrackerGUI.AccentColor)) {
+                        "📷 Capture Scene View", fontSize: 10)) {
                     ExitPaintMode(discard: true);
                     if (!string.IsNullOrEmpty(editingTask.screenshotGuid)) {
                         string op2 = AssetDatabase.GUIDToAssetPath(editingTask.screenshotGuid);
@@ -1037,8 +1031,7 @@ namespace UnityTimeTracker {
 
                 if (shotTex != null) {
                     if (TimeTrackerGUI.DrawButton(new Rect(tbx, sy, 80f, 22),
-                            "✏ Annotate", fontSize: 10,
-                            bgColor: new Color(0.25f, 0.55f, 0.25f, 1f))) {
+                            "✏ Annotate", fontSize: 10)) {
                         EnterPaintMode(shotTex);
                     }
                     tbx += 86f;
@@ -1060,7 +1053,7 @@ namespace UnityTimeTracker {
                     ? new Color(0.30f, 0.45f, 0.75f, 1f)
                     : TimeTrackerGUI.U_BG_MID;
                 if (TimeTrackerGUI.DrawButton(new Rect(tbx, sy, 60f, 22),
-                        "↩ Undo", fontSize: 10, bgColor: undoCol) && canUndo) {
+                        "↩ Undo", fontSize: 10)) {
                     PaintUndo(); repaint?.Invoke();
                 }
                 tbx += 66f;
@@ -1069,7 +1062,7 @@ namespace UnityTimeTracker {
                     ? new Color(0.20f, 0.65f, 0.30f, 1f)
                     : TimeTrackerGUI.U_BG_MID;
                 if (TimeTrackerGUI.DrawButton(new Rect(tbx, sy, 62f, 22),
-                        "💾 Save", fontSize: 10, bgColor: saveCol)) {
+                        "💾 Save", fontSize: 10)) {
                     SavePaintedScreenshot(editingTask);
                 }
                 tbx += 68f;
@@ -1216,6 +1209,7 @@ namespace UnityTimeTracker {
             // Header + ✕ close
             GUI.Label(new Rect(mx + 16, sy, mw - 60, 18), "NEW TASK",
                 TimeTrackerGUI.Style(13, TimeTrackerGUI.TextColor, FontStyle.Bold));
+            
             Rect closeR = new Rect(mx + mw - 32, sy - 1, 26, 22);
             EditorGUI.DrawRect(closeR, new Color(1f, 1f, 1f, 0.08f));
             GUI.Label(closeR, "✕",
@@ -1298,9 +1292,7 @@ namespace UnityTimeTracker {
             // Create button (full width)
             bool canCreate = !string.IsNullOrWhiteSpace(newTaskTitle);
             Rect createR   = new Rect(mx + 16, sy, mw - 32, 28);
-            if (TimeTrackerGUI.DrawButton(createR, "Create Task", fontSize: 12,
-                    bgColor:   canCreate ? TimeTrackerGUI.AccentColor : (Color?)null,
-                    textColor: canCreate ? null : TimeTrackerGUI.LabelColor) && canCreate) {
+            if (TimeTrackerGUI.DrawPrimaryButton(createR, "Create Task", fontSize: 12)) {
                 var task = TaskManagerCore.CreateTask(board, newTaskTitle.Trim(),
                     TaskStatus.TODO, ui.lastTagId);
                 task.dueDate        = newTaskDueDate;
@@ -1327,8 +1319,7 @@ namespace UnityTimeTracker {
                 newTagLabel, new GUIStyle(EditorStyles.textField) { fontSize = 11 });
             newTagColor = EditorGUI.ColorField(new Rect(pad + 180, y + 6, 40, 18), newTagColor);
 
-            if (TimeTrackerGUI.DrawButton(new Rect(pad + 226, y + 5, 50, 20), "Create",
-                    fontSize: 10, bgColor: TimeTrackerGUI.AccentColor)) {
+            if (TimeTrackerGUI.DrawButton(new Rect(pad + 226, y + 5, 50, 20), "Create")) {
                 if (!string.IsNullOrWhiteSpace(newTagLabel)) {
                     var tag = TaskManagerCore.CreateTag(board, newTagLabel.Trim(), newTagColor);
                     TaskManagerCore.UIState.lastTagId = tag.id;
@@ -1355,7 +1346,7 @@ namespace UnityTimeTracker {
             newStatusColor = EditorGUI.ColorField(new Rect(pad + 198, y + 6, 40, 18), newStatusColor);
 
             if (TimeTrackerGUI.DrawButton(new Rect(pad + 244, y + 5, 50, 20), "Create",
-                    fontSize: 10, bgColor: TimeTrackerGUI.AccentColor)) {
+                    fontSize: 10)) {
                 if (!string.IsNullOrWhiteSpace(newStatusLabel)) {
                     TaskManagerCore.CreateStatus(board, newStatusLabel.Trim(), newStatusColor);
                     Save();
@@ -1441,7 +1432,7 @@ namespace UnityTimeTracker {
                 newTagLabel  = EditorGUI.TextField(new Rect(48, sy, cw - 140, 20),
                     newTagLabel, new GUIStyle(EditorStyles.textField) { fontSize = 11 });
                 if (TimeTrackerGUI.DrawButton(new Rect(cw - 86, sy, 40, 20), "Add",
-                        fontSize: 10, bgColor: TimeTrackerGUI.AccentColor)) {
+                        fontSize: 10)) {
                     if (!string.IsNullOrWhiteSpace(newTagLabel)) {
                         TaskManagerCore.CreateTag(board, newTagLabel.Trim(), newTagColor);
                         Save();
@@ -1511,7 +1502,11 @@ namespace UnityTimeTracker {
                 System.Action onClick) {
             float w   = Mathf.Max(36f, label.Length * 7f + 14f);
             Rect  r   = new Rect(x, y, w, 22);
-            bool  hov = r.Contains(Event.current.mousePosition);
+            bool hov = r.Contains(Event.current.mousePosition);
+            
+            
+            double colBrightness =  col.HasValue ? (col.Value.r + col.Value.g + col.Value.b + 0.001) / 3f : 0;
+            Debug.Log(colBrightness);
 
             if (active) {
                 Color bg = col.HasValue ? col.Value : TimeTrackerGUI.AccentColor;
@@ -1519,7 +1514,7 @@ namespace UnityTimeTracker {
                 EditorGUI.DrawRect(r, bg);
                 EditorGUI.DrawRect(new Rect(r.x, r.y,            r.width, 1), new Color(1f,1f,1f,0.2f));
                 EditorGUI.DrawRect(new Rect(r.x, r.y+r.height-1, r.width, 1), TimeTrackerGUI.U_BORDER);
-                GUI.Label(r, label, TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor, FontStyle.Bold, TextAnchor.MiddleCenter));
+                GUI.Label(r, label, TimeTrackerGUI.Style(9,(colBrightness > .5f ? TimeTrackerGUI.DarkTextColor : TimeTrackerGUI.BrightColor), FontStyle.Bold, TextAnchor.MiddleCenter));
                 if (GUI.Button(r, GUIContent.none, GUIStyle.none)) onClick?.Invoke();
             } else {
                 Color bg = hov ? TimeTrackerGUI.U_BG_LIGHT : TimeTrackerGUI.U_BG_MID;
