@@ -1,7 +1,0 @@
-{
-  "name": "com.ethangrane.unity-time-tracker",
-  "version": "1.0.1",
-  "displayName": "Unity Time Tracker",
-  "description": "A time tracker for Unity",
-  "unity": "2021.3"
-}
