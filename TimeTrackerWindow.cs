@@ -11,7 +11,7 @@ namespace UnityTimeTracker {
     public class TimeTrackerWindow : EditorWindow {
 
         // ── Top-level nav ─────────────────────────────────────────────
-        enum AppView { TimeTracker, TaskManager }
+        enum AppView { TimeTracker, TaskManager, CodeCombat }
         AppView currentView = AppView.TimeTracker;
 
         // ── Tracker tabs ──────────────────────────────────────────────
@@ -41,6 +41,9 @@ namespace UnityTimeTracker {
         // ── Task Manager ──────────────────────────────────────────────
         TaskManagerPanel taskPanel;
 
+        // ── Code Combat ───────────────────────────────────────────────
+        CodeCombatPanel combatPanel;
+
         [MenuItem("Tools/Time Tracker")]
         public static void Open() {
             var w = GetWindow<TimeTrackerWindow>("Time Tracker");
@@ -53,6 +56,8 @@ namespace UnityTimeTracker {
             Refresh();
             taskPanel = new TaskManagerPanel();
             taskPanel.Init(() => Repaint());
+            combatPanel = new CodeCombatPanel();
+            combatPanel.Init(() => Repaint());
         }
 
         void OnFocus() => Refresh();
@@ -78,8 +83,10 @@ namespace UnityTimeTracker {
 
             if (currentView == AppView.TimeTracker)
                 DrawTrackerView(pad, ref y);
-            else
+            else if (currentView == AppView.TaskManager)
                 taskPanel?.Draw(pad, y, position.width, position.height);
+            else
+                combatPanel?.Draw(pad, y, position.width, position.height);
         }
 
         // ════════════════════════════════════════════════════════════
@@ -88,7 +95,6 @@ namespace UnityTimeTracker {
         void DrawTopNav(float pad, ref float y) {
             float navH   = 28f;
             float totalW = position.width - pad * 2;
-            float navW   = totalW * 0.5f - 3f;
 
             // Toolbar background — darker than panel, like Unity's top bar
             EditorGUI.DrawRect(new Rect(0, y, position.width, navH),
@@ -97,9 +103,10 @@ namespace UnityTimeTracker {
             EditorGUI.DrawRect(new Rect(0, y + navH, position.width, 1),
                 TimeTrackerGUI.DivColor);
 
-            string[]  navLabels = { "⏱  Time Tracker", "✓  Task Manager" };
-            AppView[] navViews  = { AppView.TimeTracker, AppView.TaskManager };
-            float[]   navX      = { pad, pad + navW + 6f };
+            string[]  navLabels = { "⏱  Time Tracker", "✓  Task Manager", "⚔  Code Combat" };
+            AppView[] navViews  = { AppView.TimeTracker, AppView.TaskManager, AppView.CodeCombat };
+            float     navW      = (totalW - 12f) / 3f;
+            float[]   navX      = { pad, pad + navW + 6f, pad + (navW + 6f) * 2f };
 
             for (int i = 0; i < navLabels.Length; i++) {
                 bool active = currentView == navViews[i];
@@ -855,7 +862,7 @@ namespace UnityTimeTracker {
             bool  changed = false;
 
             Rect scrollView = new Rect(pad, y, trackW, scrollH);
-            Rect content    = new Rect(0, 0, trackW - 16f, 1280f);
+            Rect content    = new Rect(0, 0, trackW - 16f, 1080f);
             settingsScroll  = GUI.BeginScrollView(scrollView, settingsScroll, content);
 
             float sy = 0f;
@@ -943,32 +950,6 @@ namespace UnityTimeTracker {
             changed |= ColorRow(0, ref sy, cw, "Background (dark)", theme.GetBgDark(),  c => theme.SetBgDark(c));
             changed |= ColorRow(0, ref sy, cw, "Text",              theme.GetText(),    c => theme.SetText(c));
             changed |= ColorRow(0, ref sy, cw, "Session bars",      theme.GetSession(), c => theme.SetSession(c));
-
-            sy += 8f;
-            DrawSettingsDivider(0, ref sy, cw);
-
-            DrawSettingsHeader(0, sy, cw, "BUTTON COLORS");
-            sy += 24f;
-
-            // Primary button preview
-            float prevBtnW = 90f;
-            float prevBtnX = cw - prevBtnW;
-
-            changed |= ColorRow(0, ref sy, cw, "Primary button — background",  theme.GetBtnPrimaryBg(),     c => theme.SetBtnPrimaryBg(c));
-            changed |= ColorRow(0, ref sy, cw, "Primary button — text",        theme.GetBtnPrimaryText(),   c => theme.SetBtnPrimaryText(c));
-            // live preview
-            TimeTrackerGUI.DrawButton(new Rect(prevBtnX, sy, prevBtnW, 22), "Primary", 10, primary: true);
-            sy += 30f;
-
-            changed |= ColorRow(0, ref sy, cw, "Secondary button — background", theme.GetBtnSecondaryBg(),   c => theme.SetBtnSecondaryBg(c));
-            changed |= ColorRow(0, ref sy, cw, "Secondary button — text",       theme.GetBtnSecondaryText(), c => theme.SetBtnSecondaryText(c));
-            TimeTrackerGUI.DrawButton(new Rect(prevBtnX, sy, prevBtnW, 22), "Secondary", 10);
-            sy += 30f;
-
-            changed |= ColorRow(0, ref sy, cw, "Danger button — background", theme.GetBtnDangerBg(),   c => theme.SetBtnDangerBg(c));
-            changed |= ColorRow(0, ref sy, cw, "Danger button — text",       theme.GetBtnDangerText(), c => theme.SetBtnDangerText(c));
-            TimeTrackerGUI.DrawDangerButton(new Rect(prevBtnX, sy, prevBtnW, 22), "Danger", 10);
-            sy += 30f;
 
             sy += 8f;
             DrawSettingsDivider(0, ref sy, cw);
