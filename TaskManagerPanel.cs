@@ -186,110 +186,137 @@ namespace UnityTimeTracker {
             DrawKanban(0, 0, colW, contentH);
             GUI.EndScrollView();
         }
-
+        
         // ── Top bar ───────────────────────────────────────────────────────────
+void DrawTopBar(float pad, ref float y, float trackW) 
+{
+    var ui = TaskManagerCore.UIState;
 
-        void DrawTopBar(float pad, ref float y, float trackW) 
-        {
-            var ui = TaskManagerCore.UIState;
+    // ─────────────────────────────────────────────
+    // FILA 1: FILTER + TAGS
+    // ─────────────────────────────────────────────
+    GUI.Label(new Rect(pad, y + 4, 50, 16), "FILTER",
+        TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor, FontStyle.Bold));
 
-            GUI.Label(new Rect(pad, y + 4, 50, 16), "FILTER",
-                TimeTrackerGUI.Style(9, TimeTrackerGUI.BrightColor, FontStyle.Bold));
+    float tx = pad + 56f;
 
-            float tx = pad + 56f;
+    // All chip
+    bool allActive = string.IsNullOrEmpty(ui.activeFilterTag);
+    DrawFilterChip(ref tx, y, "All", Color.white, allActive, () => {
+        ui.activeFilterTag = "";
+        TaskManagerCore.SaveUIState();
+    });
 
-            // All chip
-            bool allActive = string.IsNullOrEmpty(ui.activeFilterTag);
-            DrawFilterChip(ref tx, y, "All", Color.white, allActive, () => {
-                ui.activeFilterTag = "";
-                TaskManagerCore.SaveUIState();
-            });
+    // Tag chips (IMPORTANTE: primero chips, luego botón)
+    foreach (var tag in board.tags) {
+        bool active = ui.activeFilterTag == tag.id;
+        var cap = tag;
 
-            // Tag chips
-            foreach (var tag in board.tags) {
-                bool active = ui.activeFilterTag == tag.id;
-                var  cap    = tag;
-                DrawFilterChip(ref tx, y, tag.label, tag.GetColor(), active, () => {
-                    ui.activeFilterTag = active ? "" : cap.id;
-                    TaskManagerCore.SaveUIState();
-                });
-            }
+        DrawFilterChip(ref tx, y, tag.label, tag.GetColor(), active, () => {
+            ui.activeFilterTag = active ? "" : cap.id;
+            TaskManagerCore.SaveUIState();
+        });
+    }
 
-            // + Tag
-            if (!isCreatingTag) {
-                if (DrawSmallButton(ref tx, y, "+ Tag")) {
-                    isCreatingTag = true;
-                    newTagLabel   = "";
-                    newTagColor   = new Color(
-                        UnityEngine.Random.Range(0.25f, 0.85f),
-                        UnityEngine.Random.Range(0.25f, 0.85f),
-                        UnityEngine.Random.Range(0.25f, 0.85f), 1f);
-                }
-            } else {
-                DrawTagCreator(pad, ref y, trackW);
-                return;
-            }
-
-            // + Column
-            tx += 4f;
-            if (DrawSmallButton(ref tx, y, "+ Column")) {
-                isCreatingStatus = true;
-                newStatusLabel   = "";
-            }
-
-            // ⚙ gear — far right
-            Rect gearR = new Rect(pad + trackW - 28f, y, 28f, 24f);
-
-            // + New Task
-            float btnW = 92f;
-            Rect  addR = new Rect(pad + trackW - 28f - 4f - btnW, y, btnW, 24f);
-            if (TimeTrackerGUI.DrawPrimaryButton(addR, "+ New Task", fontSize: 11)) {
-                isCreatingTask = true;
-                newTaskTitle   = "";
-                newTaskDueDate = DateTime.Today.ToString("yyyy-MM-dd");
-                newTaskDesc    = "";
-                if (string.IsNullOrEmpty(TaskManagerCore.UIState.lastTagId))
-                    TaskManagerCore.UIState.lastTagId = "default_tag";
-            }
-
-            Color gearTxt = showTaskSettings ? TimeTrackerGUI.AccentColor : TimeTrackerGUI.TextColor;
-            if (TimeTrackerGUI.DrawSecondaryButton(gearR, "⚙", fontSize: 13)) {
-                showTaskSettings = !showTaskSettings;
-                editingTask      = null;
-            }
-
-            y += 32f;
-
-            // ── Fila 2: slider de ancho de columna ───────────────────────────────
-            float sliderW      = 120f;
-            float sx           = pad;
-            
-            float newOverride = GUI.HorizontalSlider(
-                new Rect(sx, y + 6, sliderW, 12),
-                colWidthOverride, 0f, 500f);
-            if (Mathf.Abs(newOverride - colWidthOverride) > 0.5f) {
-                colWidthOverride = newOverride;
-                repaint?.Invoke();
-            }
-            sx += sliderW + 6f;
-
-            if (colWidthOverride >= 10f) {
-                Rect resetR = new Rect(sx, y + 2, 36f, 16f);
-                if (TimeTrackerGUI.DrawButton(resetR, "Auto", fontSize: 9)) {
-                    colWidthOverride = 0f;
-                    repaint?.Invoke();
-                }
-            }
-
-            y += 22f;
-
-            if (isCreatingStatus)
-                DrawStatusCreator(pad, ref y, trackW);
-
-            EditorGUI.DrawRect(new Rect(pad, y, trackW, 1), TimeTrackerGUI.DivColor);
-            y += 8f;
+    // + Tag (al final de la fila)
+    if (!isCreatingTag) {
+        if (DrawSmallButton(ref tx, y, "+ Tag")) {
+            isCreatingTag = true;
+            newTagLabel = "";
+            newTagColor = new Color(
+                UnityEngine.Random.Range(0.25f, 0.85f),
+                UnityEngine.Random.Range(0.25f, 0.85f),
+                UnityEngine.Random.Range(0.25f, 0.85f), 1f);
         }
+    }
 
+    y += 28f;
+
+    // ─────────────────────────────────────────────
+    // FILA 2: TAG CREATION (SOLO SI ACTIVO)
+    // ─────────────────────────────────────────────
+    if (isCreatingTag)
+    {
+        DrawTagCreator(pad, ref y, trackW);
+        y += 6f; // espacio extra visual
+    }
+
+    // ─────────────────────────────────────────────
+    // FILA 3: ACTION BAR (NEW TASK / COLUMNS / GEAR)
+    // ─────────────────────────────────────────────
+    float actionY = y;
+
+    // + New Task (derecha)
+    float btnW = 92f;
+    Rect addR = new Rect(pad + trackW - 28f - 4f - btnW, actionY, btnW, 24f);
+
+    if (TimeTrackerGUI.DrawPrimaryButton(addR, "+ New Task", fontSize: 11)) {
+        isCreatingTask = true;
+        newTaskTitle   = "";
+        newTaskDueDate = DateTime.Today.ToString("yyyy-MM-dd");
+        newTaskDesc    = "";
+
+        if (string.IsNullOrEmpty(TaskManagerCore.UIState.lastTagId))
+            TaskManagerCore.UIState.lastTagId = "default_tag";
+    }
+
+    // ⚙ gear
+    Rect gearR = new Rect(pad + trackW - 28f, actionY, 28f, 24f);
+
+    Color gearTxt = showTaskSettings ? TimeTrackerGUI.AccentColor : TimeTrackerGUI.TextColor;
+    if (TimeTrackerGUI.DrawSecondaryButton(gearR, "⚙", fontSize: 13)) {
+        showTaskSettings = !showTaskSettings;
+        editingTask = null;
+    }
+
+    // + Column (izquierda del todo del action bar)
+    float colBtnW = 90f;
+    Rect colR = new Rect(pad, actionY, colBtnW, 24f);
+
+    if (TimeTrackerGUI.DrawSecondaryButton(colR, "+ Columns", fontSize: 11)) {
+        isCreatingStatus = true;
+        newStatusLabel = "";
+    }
+
+    y += 32f;
+
+    // ─────────────────────────────────────────────
+    // FILA 4: SLIDER
+    // ─────────────────────────────────────────────
+    float sliderW = 120f;
+    float sx = pad;
+
+    float newOverride = GUI.HorizontalSlider(
+        new Rect(sx, y + 6, sliderW, 12),
+        colWidthOverride, 0f, 500f);
+
+    if (Mathf.Abs(newOverride - colWidthOverride) > 0.5f) {
+        colWidthOverride = newOverride;
+        repaint?.Invoke();
+    }
+
+    sx += sliderW + 6f;
+
+    if (colWidthOverride >= 10f) {
+        Rect resetR = new Rect(sx, y + 2, 36f, 16f);
+        if (TimeTrackerGUI.DrawButton(resetR, "Auto", fontSize: 9)) {
+            colWidthOverride = 0f;
+            repaint?.Invoke();
+        }
+    }
+
+    y += 22f;
+
+    // ─────────────────────────────────────────────
+    // STATUS CREATOR
+    // ─────────────────────────────────────────────
+    if (isCreatingStatus)
+        DrawStatusCreator(pad, ref y, trackW);
+
+    EditorGUI.DrawRect(new Rect(pad, y, trackW, 1), TimeTrackerGUI.DivColor);
+    y += 8f;
+}
+        
         // ── Kanban columns ────────────────────────────────────────────────────
 
         void DrawKanban(float x, float y, float colW, float contentH) {

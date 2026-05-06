@@ -87,7 +87,7 @@ namespace UnityTimeTracker {
         
         
         static List<EnemyDef> BuildRoster() {
-            string[] enemyNames = new string[] { "1","2","3" };
+            string[] enemyNames = new string[] { "Ordinary Men","Ziggy the Alien","3" };
 
             var list = new List<EnemyDef>(ENEMY_COUNT);
             for (int i = 0; i < ENEMY_COUNT; i++) {

@@ -59,7 +59,8 @@ namespace UnityTimeTracker {
         }
         
         const string ENABLE_KEY = "CodeCombat_Enabled";
-
+        const string TOP_DAMAGE_KEY = "CodeCombat_TopDamage";
+        
         public static bool Enabled {
             get => EditorPrefs.GetBool(ENABLE_KEY, false); // 🔥 por defecto OFF
             set {
@@ -91,7 +92,8 @@ namespace UnityTimeTracker {
 
         static void OnAfterReload() {
             if (!Enabled) return;
-
+            
+            LoadTopDamage();
             Load();
 
             try {
@@ -178,6 +180,8 @@ namespace UnityTimeTracker {
                 .OrderByDescending(x => x.damage)
                 .Take(10)
                 .ToList();
+            
+            SaveTopDamage();
         }
 
         // ── Snapshot I/O ──────────────────────────────────────────────
@@ -290,6 +294,30 @@ namespace UnityTimeTracker {
             _state = new CombatSaveData { currentHp = CurrentEnemy.maxHp };
             Save();
             OnStateChanged?.Invoke();
+        }
+        
+        static void SaveTopDamage() {
+            try {
+                string json = JsonUtility.ToJson(new Wrapper { list = _topDamage });
+                EditorPrefs.SetString(TOP_DAMAGE_KEY, json);
+            } catch { }
+        }
+
+        static void LoadTopDamage() {
+            try {
+                string json = EditorPrefs.GetString(TOP_DAMAGE_KEY, "");
+                if (string.IsNullOrEmpty(json)) return;
+
+                var wrapper = JsonUtility.FromJson<Wrapper>(json);
+                _topDamage = wrapper?.list ?? new List<ScriptDamageEntry>();
+            } catch {
+                _topDamage = new List<ScriptDamageEntry>();
+            }
+        }
+
+        [Serializable]
+        class Wrapper {
+            public List<ScriptDamageEntry> list;
         }
     }
 }

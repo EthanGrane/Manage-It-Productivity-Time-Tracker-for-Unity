@@ -85,6 +85,8 @@ namespace UnityTimeTracker {
                 EditorGUI.DrawRect(new Rect(imgX - 4, cy - 4, imgSize + 8, imgSize + 8), flash);
             }
 
+            DrawEnemyName(CodeCombatCore.CurrentEnemy, cx, cy - 6f, cw);
+            
             DrawEnemyImage(CodeCombatCore.CurrentEnemy, imgX, cy, imgSize);
 
             // Damage pop-up
@@ -134,7 +136,19 @@ namespace UnityTimeTracker {
 
             
         }
-
+        private void DrawEnemyName(EnemyDef currentEnemy, float x, float y, float w)
+        {
+            GUI.Label(
+                new Rect(x, y, w, 20f),
+                currentEnemy.name,
+                TimeTrackerGUI.Style(
+                    12,
+                    TimeTrackerGUI.TextColor,
+                    FontStyle.Bold,
+                    TextAnchor.MiddleCenter
+                )
+            );
+        }
         bool EnableCodeCombat(float pad, float panelW, float y)
         {
             float headerH = 28f;
