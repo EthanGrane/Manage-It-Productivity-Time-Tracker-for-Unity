@@ -205,7 +205,6 @@ namespace UnityTimeTracker {
         }
 
         // ── Overlay commit markers on a timeline strip ────────────────
-        static string _hoveredCommitTooltip = null;
         static Rect   _tooltipRect;
 
         public static void DrawCommitMarkers(float pad, float trackW, float trackTop, float trackH,

@@ -261,7 +261,6 @@ namespace UnityTimeTracker {
             y += 32f;
 
             // ── Fila 2: slider de ancho de columna ───────────────────────────────
-            float sliderLabelW = 38f;
             float sliderW      = 120f;
             float sx           = pad;
             

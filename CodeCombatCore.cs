@@ -4,11 +4,10 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using UnityEditor;
-using UnityEditor.Compilation;
 using UnityEngine;
 
 namespace UnityTimeTracker {
-    
+
     // ── Persistent combat state ───────────────────────────────────────────────
 
     [Serializable]
@@ -33,7 +32,6 @@ namespace UnityTimeTracker {
     [InitializeOnLoad]
     public static class CodeCombatCore {
 
-        // ── Enemy roster — defined in CodeCombatEnemies.cs ───────────
         public static List<EnemyDef> Enemies => CodeCombatEnemies.All;
 
         // ── Events ───────────────────────────────────────────────────
@@ -64,23 +62,17 @@ namespace UnityTimeTracker {
                 Path.GetDirectoryName(Application.dataPath),
                 "Temp", "CodeCombatSnapshot.json");
 
-        // ── Constructor ───────────────────────────────────────────────
         static CodeCombatCore() {
             AssemblyReloadEvents.afterAssemblyReload += OnAfterReload;
         }
 
-        // ─────────────────────────────────────────────────────────────
-        //  Main entry point — runs after every successful compile
-        // ─────────────────────────────────────────────────────────────
         static void OnAfterReload() {
             Load();
-
             try {
                 string   assetsPath = Application.dataPath;
                 string[] allFiles   = Directory
                     .GetFiles(assetsPath, "*.cs", SearchOption.AllDirectories);
 
-                // ── 1. Diff against previous snapshot ─────────────────
                 int          totalChurn = 0;
                 FileSnapshot prev       = LoadSnapshot();
 
@@ -102,14 +94,11 @@ namespace UnityTimeTracker {
                     }
                 }
 
-                // ── 2. Apply damage ───────────────────────────────────
                 if (totalChurn > 0)
                     ApplyDamage(totalChurn);
 
-                // ── 3. Save current state as baseline for next compile ─
                 SaveSnapshot(allFiles);
-
-            } catch { /* never crash the editor */ }
+            } catch { }
         }
 
         // ── Snapshot I/O ──────────────────────────────────────────────
@@ -125,10 +114,8 @@ namespace UnityTimeTracker {
         static void SaveSnapshot(string[] files) {
             var snap = new FileSnapshot();
             foreach (string f in files) {
-                try {
-                    snap.paths.Add(f);
-                    snap.contents.Add(File.ReadAllText(f));
-                } catch { }
+                try { snap.paths.Add(f); snap.contents.Add(File.ReadAllText(f)); }
+                catch { }
             }
             try {
                 string dir = Path.GetDirectoryName(SnapshotPath);
@@ -137,11 +124,10 @@ namespace UnityTimeTracker {
             } catch { }
         }
 
-        // ── Gross churn: lines added + lines removed ──────────────────
+        // ── Churn diff ────────────────────────────────────────────────
+
         static int ComputeChurn(string before, string after) {
-            string[] lBefore = SplitLines(before);
-            string[] lAfter  = SplitLines(after);
-            DiffLines(lBefore, lAfter, out int added, out int removed);
+            DiffLines(SplitLines(before), SplitLines(after), out int added, out int removed);
             return added + removed;
         }
 
@@ -152,29 +138,24 @@ namespace UnityTimeTracker {
                 .ToArray();
 
         static void DiffLines(string[] before, string[] after, out int added, out int removed) {
-            int n = before.Length;
-            int m = after.Length;
-
+            int n = before.Length, m = after.Length;
             if (n > 500 || m > 500) {
-                int delta = m - n;
-                added   = delta > 0 ? delta : 0;
-                removed = delta < 0 ? -delta : 0;
+                int d = m - n;
+                added = d > 0 ? d : 0; removed = d < 0 ? -d : 0;
                 return;
             }
-
             int[,] dp = new int[n + 1, m + 1];
             for (int i = 1; i <= n; i++)
                 for (int j = 1; j <= m; j++)
-                    dp[i, j] = before[i - 1] == after[j - 1]
-                        ? dp[i - 1, j - 1] + 1
-                        : Math.Max(dp[i - 1, j], dp[i, j - 1]);
-
+                    dp[i, j] = before[i-1] == after[j-1]
+                        ? dp[i-1, j-1] + 1
+                        : Math.Max(dp[i-1, j], dp[i, j-1]);
             int lcs = dp[n, m];
-            removed = n - lcs;
-            added   = m - lcs;
+            removed = n - lcs; added = m - lcs;
         }
 
-        // ── Deal damage and handle kill chain ────────────────────────
+        // ── Damage + kill chain ───────────────────────────────────────
+
         public static void ApplyDamage(int damage) {
             if (damage <= 0) return;
             Load();
@@ -201,6 +182,7 @@ namespace UnityTimeTracker {
         }
 
         // ── Persistence ──────────────────────────────────────────────
+
         static void Load() {
             string json = EditorPrefs.GetString(PREFS_KEY, "");
             if (string.IsNullOrEmpty(json))
@@ -209,21 +191,15 @@ namespace UnityTimeTracker {
                 try { _state = JsonUtility.FromJson<CombatSaveData>(json); }
                 catch { _state = new CombatSaveData(); }
             }
-
-            if (_state.currentHp < 0)
-                _state.currentHp = CurrentEnemy.maxHp;
-
-            if (_state.currentHp > CurrentEnemy.maxHp)
-                _state.currentHp = CurrentEnemy.maxHp;
+            if (_state.currentHp < 0)         _state.currentHp = CurrentEnemy.maxHp;
+            if (_state.currentHp > CurrentEnemy.maxHp) _state.currentHp = CurrentEnemy.maxHp;
         }
 
-        static void Save() {
+        static void Save() =>
             EditorPrefs.SetString(PREFS_KEY, JsonUtility.ToJson(_state));
-        }
 
         public static void ResetState() {
-            _state = new CombatSaveData();
-            _state.currentHp = CurrentEnemy.maxHp;
+            _state = new CombatSaveData { currentHp = CurrentEnemy.maxHp };
             Save();
             OnStateChanged?.Invoke();
         }
