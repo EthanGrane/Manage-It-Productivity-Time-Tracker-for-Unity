@@ -50,8 +50,14 @@ namespace UnityTimeTracker {
         // ── Draw ──────────────────────────────────────────────────────────────
         public void Draw(float pad, float y, float windowW, float windowH) {
             UpdateTimers();
-
             float panelW = windowW - pad * 2;
+            y += 15f;
+
+            // Draw enable button
+            if(!EnableCodeCombat(pad, panelW, y))
+                return;
+
+            y += 25f;
 
             // Header
             y += 20f;
@@ -112,17 +118,98 @@ namespace UnityTimeTracker {
             DrawStats(cx, cy, cw);
 
             y += cardH + 10f;
-
+            DrawTopDamage(pad, ref y, panelW);
+            
             // Footer
             GUI.Label(new Rect(pad, y, panelW - 80f, 14),
                 "Write code → save → Unity compiles → enemy takes damage",
                 TimeTrackerGUI.Style(9, TimeTrackerGUI.LabelColor));
-
-            Rect resetR = new Rect(pad + panelW - 70f, y - 2f, 68f, 18f);
             /*
+             // Reset
+            Rect resetR = new Rect(pad + panelW - 70f, y - 2f, 68f, 18f);
             if (TimeTrackerGUI.DrawDangerButton(resetR, "Reset", 9))
                 CodeCombatCore.ResetState();
                 */
+            
+
+            
+        }
+
+        bool EnableCodeCombat(float pad, float panelW, float y)
+        {
+            float headerH = 28f;
+
+            bool enabled = CodeCombatCore.Enabled;
+
+            Rect toggleRect = new Rect(pad, y, 50f, headerH);
+
+            Color bg = enabled
+                ? TimeTrackerGUI.BgDark * 1.25f
+                : TimeTrackerGUI.BgDark;
+
+            // fondo
+            EditorGUI.DrawRect(toggleRect, bg);
+
+            // hover (misma lógica que tus tabs)
+            bool hov = toggleRect.Contains(Event.current.mousePosition);
+            if (hov && !enabled) {
+                EditorGUI.DrawRect(toggleRect, new Color(1f, 1f, 1f, 0.05f));
+                _repaint?.Invoke();
+            }
+
+            // label con TU Style API
+            GUI.Label(
+                toggleRect,
+                enabled ? "⚔ ON" : "⚔ OFF",
+                TimeTrackerGUI.Style(
+                    11,
+                    enabled ? TimeTrackerGUI.TextColor : TimeTrackerGUI.LabelColor,
+                    FontStyle.Bold,
+                    TextAnchor.MiddleCenter
+                )
+            );
+
+            // click (sin GUI.Button, como tu sistema de tabs)
+            if (GUI.Button(toggleRect, GUIContent.none, GUIStyle.none)) {
+                CodeCombatCore.Enabled = !enabled;
+                _repaint?.Invoke();
+            }
+
+            return enabled;
+        }
+        
+        void DrawTopDamage(float cx, ref float y, float cw) {
+
+            var list = CodeCombatCore.TopDamage;
+            if (list == null || list.Count == 0) return;
+
+            GUI.Label(new Rect(cx, y, cw, 16),
+                "📜 Top Damage Scripts",
+                TimeTrackerGUI.Style(10, TimeTrackerGUI.LabelColor, FontStyle.Bold));
+
+            y += 18f;
+
+            float rowH = 18f;
+
+            for (int i = 0; i < list.Count; i++) {
+
+                var e = list[i];
+
+                Rect r = new Rect(cx, y + i * (rowH + 2f), cw, rowH);
+
+                EditorGUI.DrawRect(r, new Color(0, 0, 0, 0.15f));
+
+                GUI.Label(new Rect(r.x + 6, r.y, cw * 0.7f, rowH),
+                    $"#{i + 1}  {System.IO.Path.GetFileName(e.scriptPath)}",
+                    TimeTrackerGUI.Style(9, TimeTrackerGUI.TextColor));
+
+                GUI.Label(new Rect(r.x + cw - 60, r.y, 60, rowH),
+                    e.damage.ToString(),
+                    TimeTrackerGUI.Style(9, new Color(1f, 0.6f, 0.2f),
+                        FontStyle.Bold, TextAnchor.MiddleRight));
+            }
+
+            y += list.Count * (rowH + 2f);
         }
 
         // ── Enemy image ───────────────────────────────────────────────────────

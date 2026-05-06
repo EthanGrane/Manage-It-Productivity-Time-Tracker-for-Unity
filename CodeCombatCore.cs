@@ -19,6 +19,13 @@ namespace UnityTimeTracker {
         public string lastHitTime = "";
     }
 
+    [Serializable]
+    public class ScriptDamageEntry {
+        public string scriptPath;
+        public int damage;
+        public float lastTime;
+    }
+    
     // ── Compile snapshot ──────────────────────────────────────────────────────
 
     [Serializable]
@@ -28,6 +35,7 @@ namespace UnityTimeTracker {
     }
 
     // ── Core ──────────────────────────────────────────────────────────────────
+    
 
     [InitializeOnLoad]
     public static class CodeCombatCore {
@@ -41,8 +49,23 @@ namespace UnityTimeTracker {
 
         // ── State ────────────────────────────────────────────────────
         static CombatSaveData _state;
+        
+        static List<ScriptDamageEntry> _topDamage = new List<ScriptDamageEntry>();
+
+        public static IReadOnlyList<ScriptDamageEntry> TopDamage => _topDamage;
+        
         public static CombatSaveData State {
             get { if (_state == null) Load(); return _state; }
+        }
+        
+        const string ENABLE_KEY = "CodeCombat_Enabled";
+
+        public static bool Enabled {
+            get => EditorPrefs.GetBool(ENABLE_KEY, false); // 🔥 por defecto OFF
+            set {
+                EditorPrefs.SetBool(ENABLE_KEY, value);
+                OnStateChanged?.Invoke();
+            }
         }
 
         public static EnemyDef CurrentEnemy =>
@@ -67,38 +90,94 @@ namespace UnityTimeTracker {
         }
 
         static void OnAfterReload() {
-            Load();
-            try {
-                string   assetsPath = Application.dataPath;
-                string[] allFiles   = Directory
-                    .GetFiles(assetsPath, "*.cs", SearchOption.AllDirectories);
+            if (!Enabled) return;
 
-                int          totalChurn = 0;
-                FileSnapshot prev       = LoadSnapshot();
+            Load();
+
+            try {
+                string assetsPath = Application.dataPath;
+                string[] allFiles = Directory.GetFiles(
+                    assetsPath,
+                    "*.cs",
+                    SearchOption.AllDirectories
+                );
+
+                Dictionary<string, int> damageByFile = new Dictionary<string, int>();
+                FileSnapshot prev = LoadSnapshot();
+
+                int totalChurn = 0;
 
                 if (prev.paths.Count > 0) {
+
                     var oldContent = new Dictionary<string, string>(
-                        StringComparer.OrdinalIgnoreCase);
+                        StringComparer.OrdinalIgnoreCase
+                    );
+
                     for (int i = 0; i < prev.paths.Count; i++)
                         oldContent[prev.paths[i]] = prev.contents[i];
 
                     foreach (string file in allFiles) {
+
                         string current;
-                        try { current = File.ReadAllText(file); }
-                        catch { continue; }
+                        try {
+                            current = File.ReadAllText(file);
+                        }
+                        catch {
+                            continue;
+                        }
 
                         if (oldContent.TryGetValue(file, out string old)) {
-                            if (old == current) continue;
-                            totalChurn += ComputeChurn(old, current);
+
+                            if (old == current)
+                                continue;
+
+                            int churn = ComputeChurn(old, current);
+
+                            totalChurn += churn;
+
+                            if (churn > 0) {
+                                damageByFile[file] = churn;
+                            }
                         }
                     }
                 }
 
-                if (totalChurn > 0)
-                    ApplyDamage(totalChurn);
+                foreach (var kv in damageByFile) {
+                    CodeCombatCore.ApplyDamage(kv.Value, kv.Key);
+                }
+                
+                foreach (var kv in damageByFile) {
+
+                    CodeCombatCore.RegisterDamage(kv.Key, kv.Value);
+                }
 
                 SaveSnapshot(allFiles);
-            } catch { }
+
+            } catch (Exception e) {
+                Debug.LogError(e);
+            }
+        }
+        
+        public static void RegisterDamage(string path, int dmg) {
+
+            var entry = _topDamage.FirstOrDefault(x => x.scriptPath == path);
+
+            if (entry == null) {
+                entry = new ScriptDamageEntry {
+                    scriptPath = path,
+                    damage = dmg,
+                    lastTime = Time.realtimeSinceStartup
+                };
+                _topDamage.Add(entry);
+            } else {
+                entry.damage += dmg;
+                entry.lastTime = Time.realtimeSinceStartup;
+            }
+
+            _topDamage = _topDamage
+                .OrderByDescending(x => x.damage)
+                .Take(10)
+                .ToList();
         }
 
         // ── Snapshot I/O ──────────────────────────────────────────────
@@ -156,7 +235,7 @@ namespace UnityTimeTracker {
 
         // ── Damage + kill chain ───────────────────────────────────────
 
-        public static void ApplyDamage(int damage) {
+        public static void ApplyDamage(int damage, string scriptPath = "Unknown") {
             if (damage <= 0) return;
             Load();
 
@@ -164,16 +243,25 @@ namespace UnityTimeTracker {
             State.totalDamage += damage;
             State.lastHitTime  = DateTime.Now.ToString("HH:mm:ss");
 
+            EnemyDef enemy = CurrentEnemy; // 🔥 snapshot estable
+
             int actualDamage = damage;
 
             while (State.currentHp <= 0) {
+
                 State.totalKills++;
-                OnKill?.Invoke(CurrentEnemy);
+                OnKill?.Invoke(enemy);
 
                 State.enemyIndex = (State.enemyIndex + 1) % Enemies.Count;
+
                 int overflow = -State.currentHp;
-                State.currentHp = CurrentEnemy.maxHp - overflow;
-                if (State.currentHp < 0) State.currentHp = 0;
+
+                enemy = CurrentEnemy; // 🔥 actualizar SOLO después del cambio
+
+                State.currentHp = enemy.maxHp - overflow;
+
+                if (State.currentHp < 0)
+                    State.currentHp = 0;
             }
 
             Save();
