@@ -1,7 +1,7 @@
 {
   "name": "com.ethangrane.unity-time-tracker",
-  "version": "1.0.1",
-  "displayName": "Unity Time Tracker",
-  "description": "A time tracker for Unity",
+  "version": "1.1.0",
+  "displayName": "Manage It - Productivity Time Tracker for Unity\n",
+  "description": "A time tracker & task manager for Unity\nhttps://github.com/EthanGrane/Manage-It-Productivity-Time-Tracker-for-Unity",
   "unity": "2021.3"
 }
