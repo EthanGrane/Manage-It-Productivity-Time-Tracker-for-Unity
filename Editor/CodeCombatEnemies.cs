@@ -77,7 +77,7 @@ namespace UnityTimeTracker {
 
         const int    ENEMY_COUNT = 8;       // ← set to total number of creature GIFs
         const int    HP_BASE     = 30;      // HP of enemy index 0
-        const int    HP_STEP     = 40;      // HP added per enemy level
+        const int    HP_STEP     = 20;      // HP added per enemy level
 
         // Raw-content URL for the Resources branch
         const string GIF_BASE =
@@ -87,7 +87,7 @@ namespace UnityTimeTracker {
         
         
         static List<EnemyDef> BuildRoster() {
-            string[] enemyNames = new string[] { "Ordinary Men","Ziggy the Alien","3" };
+            string[] enemyNames = new string[] { "Ordinary Men","Ziggy the Alien","Hey Listen", "Crimson King" };
 
             var list = new List<EnemyDef>(ENEMY_COUNT);
             for (int i = 0; i < ENEMY_COUNT; i++) {
