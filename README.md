@@ -1,6 +1,6 @@
-# ⏱️ Manage It - Productivity Time Tracker for Unity
+# ⏱️ Unity Time Tracker
 
-A lightweight time tracking tool and task manager for Unity, designed especially for **self-employed developers** who want to measure real working time without friction.
+A lightweight time tracking tool for Unity, designed especially for **self-employed developers** who want to measure real working time without friction.
 
 Tracks your work sessions automatically and stores them in a simple JSON file for easy access, analysis, or integration with other tools.
 
@@ -10,12 +10,12 @@ https://github.com/user-attachments/assets/384dab18-e2bf-43e1-a1cd-de1cf7e999f1
 
 Git
 ```bash
-git clone --branch release https://github.com/EthanGrane/Manage-It-Productivity-Time-Tracker-for-Unity.git
+git clone https://github.com/EthanGrane/Unity-Time-Tracker.git
 ```
 
 Git URL (Unity Package Manager)
 ```bash
-https://github.com/EthanGrane/Manage-It-Productivity-Time-Tracker-for-Unity.git#release
+https://github.com/EthanGrane/Unity-Time-Tracker.git
 ```
 
 Follow these steps to get started:
@@ -24,14 +24,14 @@ Follow these steps to get started:
 Download or clone this repository into your Unity project.
 
 ### 2. Move to Editor folder
-Place the `Manage-It-Productivity-Time-Tracker-for-Unity` folder inside: ```Assets/Editor/```
-
-or ```Manage-It-Productivity-Time-Tracker-for-Unity/Editor```
+Place the `UnityTimerTracker` folder inside: ```Assets/Editor/```
 
 ### 3. Open the window
-Tools -> Manage It
+Tools -> Time Tracker
 
-<img width="202" height="76" alt="image" src="https://github.com/user-attachments/assets/0c1be8a7-6422-448f-9c4c-89404cd31521" />
+<img width="186" height="110" alt="image" src="https://github.com/user-attachments/assets/e9298924-fc81-4aa7-b6bd-bf5aa72e1f47" />
+
+
 
 ---
 
@@ -54,7 +54,7 @@ Make sure to enable:
 
 ## 📂 Troubleshooting
 
-You need to put the ```Manage-It-Productivity-Time-Tracker-for-Unity``` folder in the path ```Assets/Editor/```
+You need to put the UnityTimerTracker folder in the path ```Assets/Editor/```
 
 ---
 

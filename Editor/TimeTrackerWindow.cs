@@ -44,9 +44,9 @@ namespace UnityTimeTracker {
         // ── Code Combat ───────────────────────────────────────────────
         CodeCombatPanel combatPanel;
 
-        [MenuItem("Tools/Time Tracker")]
+        [MenuItem("Tools/Manage It")]
         public static void Open() {
-            var w = GetWindow<TimeTrackerWindow>("Time Tracker");
+            var w = GetWindow<TimeTrackerWindow>("Manage It");
             w.minSize = new Vector2(460, 400);
         }
 

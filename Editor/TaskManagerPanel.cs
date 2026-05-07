@@ -38,6 +38,18 @@ namespace UnityTimeTracker {
         Vector2 detailScroll;
         Vector2 settingsScroll;
 
+        // ── Drag & drop state ────────────────────────────────────────────────
+        TrackerTask _dragTask        = null;   // task being dragged
+        int         _dragSourceCol   = -1;     // column index it came from
+        int         _dragInsertCol   = -1;     // column the ghost is hovering
+        int         _dragInsertIdx   = -1;     // insertion slot in that column
+        Vector2     _dragOffset      = Vector2.zero;  // mouse offset from card origin
+        Vector2     _dragMousePos    = Vector2.zero;  // current mouse position (scroll-space)
+        bool        _dragActive      = false;
+        const float DRAG_THRESHOLD   = 6f;     // pixels before drag starts
+        Vector2     _dragStartMouse  = Vector2.zero;
+        TrackerTask _dragPending     = null;   // card clicked but not yet dragged
+
         // Sub-tab for task manager
         bool showTaskSettings = false;
 
@@ -185,6 +197,10 @@ namespace UnityTimeTracker {
             kanbanScroll    = GUI.BeginScrollView(scrollView, kanbanScroll, content);
             DrawKanban(0, 0, colW, contentH);
             GUI.EndScrollView();
+
+            // Draw floating ghost card in screen space (outside scroll view)
+            if (_dragActive)
+                DrawDragOverlay(scrollView.x, scrollView.y);
         }
         
         // ── Top bar ───────────────────────────────────────────────────────────
@@ -317,17 +333,145 @@ void DrawTopBar(float pad, ref float y, float trackW)
     y += 8f;
 }
         
+        // ── Drag & drop helpers ───────────────────────────────────────────────
+
+        // Returns the scroll-space mouse position compensating for the kanban scroll offset
+        Vector2 KanbanMouse(Event evt) => evt.mousePosition; // already in scroll-space inside BeginScrollView
+
+        void BeginDrag(TrackerTask task, int colIdx, Vector2 mouse, float cardX, float cardY) {
+            _dragTask      = task;
+            _dragSourceCol = colIdx;
+            _dragActive    = true;
+            _dragOffset    = new Vector2(mouse.x - cardX, mouse.y - cardY);
+            _dragMousePos  = mouse;
+            _dragInsertCol = colIdx;
+            _dragInsertIdx = -1;
+            _dragPending   = null;
+        }
+
+        void EndDrag(bool commit) {
+            if (commit && _dragTask != null && _dragInsertCol >= 0 && _dragInsertCol < board.statuses.Count) {
+                string newStatus = board.statuses[_dragInsertCol].id;
+
+                // Move status if changed
+                TaskManagerCore.MoveTask(board, _dragTask, newStatus);
+
+                // Reorder within column
+                string filter = TaskManagerCore.UIState.activeFilterTag;
+                var colTasks  = TaskManagerCore.GetTasksForStatus(board, newStatus, filter).ToList();
+
+                // Remove the dragged task from the list, insert at slot
+                colTasks.Remove(_dragTask);
+                int insertAt = Mathf.Clamp(_dragInsertIdx, 0, colTasks.Count);
+                colTasks.Insert(insertAt, _dragTask);
+
+                // Update order values for this column
+                for (int i = 0; i < colTasks.Count; i++)
+                    colTasks[i].order = i;
+
+                Save();
+                repaint?.Invoke();
+            }
+
+            _dragTask      = null;
+            _dragActive    = false;
+            _dragPending   = null;
+            _dragSourceCol = -1;
+            _dragInsertCol = -1;
+            _dragInsertIdx = -1;
+        }
+
+        // Compute which (col, insertIdx) the mouse is over
+        void UpdateDragInsert(float x, float y, float colW) {
+            float mx = _dragMousePos.x;
+            float my = _dragMousePos.y;
+
+            string filter = TaskManagerCore.UIState.activeFilterTag;
+            int bestCol = -1;
+            // Find which column the mouse is horizontally over
+            for (int ci = 0; ci < board.statuses.Count; ci++) {
+                float colX = x + ci * (colW + COL_GAP);
+                if (mx >= colX && mx < colX + colW) { bestCol = ci; break; }
+            }
+            if (bestCol < 0) return;
+            _dragInsertCol = bestCol;
+
+            // Find insert slot vertically
+            var tasks = TaskManagerCore.GetTasksForStatus(board, board.statuses[bestCol].id, filter);
+            float cardY = y + 36f;
+            _dragInsertIdx = tasks.Count; // default: append at end
+            for (int ti = 0; ti < tasks.Count; ti++) {
+                if (tasks[ti] == _dragTask) continue; // skip self
+                float cardH = MeasureCard(tasks[ti]);
+                float midY  = cardY + cardH * 0.5f;
+                if (my < midY) { _dragInsertIdx = ti; break; }
+                cardY += cardH + 6f;
+            }
+        }
+
         // ── Kanban columns ────────────────────────────────────────────────────
 
         void DrawKanban(float x, float y, float colW, float contentH) {
             string filter = TaskManagerCore.UIState.activeFilterTag;
+            var    evt    = Event.current;
 
+            // ── Global drag event handling ────────────────────────────────────
+            if (_dragActive) {
+                if (evt.type == EventType.MouseDrag || evt.type == EventType.MouseMove) {
+                    _dragMousePos = KanbanMouse(evt);
+                    UpdateDragInsert(x, y, colW);
+                    repaint?.Invoke();
+                    evt.Use();
+                } else if (evt.type == EventType.MouseUp) {
+                    EndDrag(commit: true);
+                    evt.Use();
+                    return;
+                }
+            } else if (_dragPending != null) {
+                if (evt.type == EventType.MouseDrag) {
+                    Vector2 delta = KanbanMouse(evt) - _dragStartMouse;
+                    if (delta.magnitude >= DRAG_THRESHOLD) {
+                        // Compute card origin for the pending task
+                        int pendingCol = board.statuses.FindIndex(s => s.id == _dragPending.statusId);
+                        if (pendingCol >= 0) {
+                            float colX  = x + pendingCol * (colW + COL_GAP);
+                            var   colTasks = TaskManagerCore.GetTasksForStatus(board, _dragPending.statusId, filter);
+                            float cY    = y + 36f;
+                            foreach (var t in colTasks) {
+                                if (t == _dragPending) break;
+                                cY += MeasureCard(t) + 6f;
+                            }
+                            BeginDrag(_dragPending, pendingCol, _dragStartMouse, colX + 5, cY);
+                        } else {
+                            _dragPending = null;
+                        }
+                    }
+                    evt.Use();
+                } else if (evt.type == EventType.MouseUp) {
+                    // Short click — open detail
+                    editingTask  = _dragPending;
+                    detailScroll = Vector2.zero;
+                    _dragPending = null;
+                    repaint?.Invoke();
+                    evt.Use();
+                }
+            }
+
+            // ── Draw columns ──────────────────────────────────────────────────
             for (int ci = 0; ci < board.statuses.Count; ci++) {
                 var   status = board.statuses[ci];
                 float colX   = x + ci * (colW + COL_GAP);
                 Color stCol  = GetStatusColor(status);
 
-                EditorGUI.DrawRect(new Rect(colX, y, colW, contentH - 4), TimeTrackerGUI.BgDark);
+                // Drop-target highlight when dragging over this column
+                bool isDragTarget = _dragActive && _dragInsertCol == ci;
+                Color colBg = isDragTarget
+                    ? new Color(TimeTrackerGUI.BgDark.r + 0.04f,
+                                TimeTrackerGUI.BgDark.g + 0.04f,
+                                TimeTrackerGUI.BgDark.b + 0.06f)
+                    : TimeTrackerGUI.BgDark;
+
+                EditorGUI.DrawRect(new Rect(colX, y, colW, contentH - 4), colBg);
                 EditorGUI.DrawRect(new Rect(colX, y, colW, 4), stCol);
 
                 var tasks = TaskManagerCore.GetTasksForStatus(board, status.id, filter);
@@ -341,16 +485,101 @@ void DrawTopBar(float pad, ref float y, float trackW)
                     TimeTrackerGUI.Style(10, stCol, anchor: TextAnchor.UpperRight));
 
                 float cardY = y + 36f;
-                foreach (var task in tasks) {
+                for (int ti = 0; ti < tasks.Count; ti++) {
+                    var   task  = tasks[ti];
                     float cardH = MeasureCard(task);
+
+                    // Draw ghost slot BEFORE this card if dragging here
+                    if (_dragActive && _dragInsertCol == ci && _dragInsertIdx == ti) {
+                        float ghostH = _dragTask != null ? MeasureCard(_dragTask) : 40f;
+                        DrawGhostSlot(colX, cardY, colW, ghostH, stCol);
+                        cardY += ghostH + 6f;
+                    }
+
                     DrawCard(task, colX, cardY, colW, cardH, ci);
                     cardY += cardH + 6f;
                 }
 
-                if (tasks.Count == 0)
+                // Ghost at the end of column
+                if (_dragActive && _dragInsertCol == ci && _dragInsertIdx >= tasks.Count) {
+                    float ghostH = _dragTask != null ? MeasureCard(_dragTask) : 40f;
+                    DrawGhostSlot(colX, cardY, colW, ghostH, stCol);
+                }
+
+                if (tasks.Count == 0 && !(_dragActive && _dragInsertCol == ci))
                     GUI.Label(new Rect(colX + 10, y + 52, colW - 20, 18), "No tasks",
                         TimeTrackerGUI.Style(9, TimeTrackerGUI.LabelColor, anchor: TextAnchor.UpperCenter));
             }
+        }
+
+        // ── Ghost slot ────────────────────────────────────────────────────────
+
+        void DrawGhostSlot(float colX, float cardY, float colW, float ghostH, Color accentCol) {
+            Rect r = new Rect(colX + 5, cardY, colW - 10, ghostH);
+            // Dashed/outlined ghost card
+            Color ghostBg  = new Color(accentCol.r, accentCol.g, accentCol.b, 0.08f);
+            Color ghostBdr = new Color(accentCol.r, accentCol.g, accentCol.b, 0.55f);
+            EditorGUI.DrawRect(r, ghostBg);
+            // Border lines
+            EditorGUI.DrawRect(new Rect(r.x,              r.y,              r.width, 1),      ghostBdr);
+            EditorGUI.DrawRect(new Rect(r.x,              r.yMax - 1,       r.width, 1),      ghostBdr);
+            EditorGUI.DrawRect(new Rect(r.x,              r.y,              1,       r.height), ghostBdr);
+            EditorGUI.DrawRect(new Rect(r.xMax - 1,       r.y,              1,       r.height), ghostBdr);
+            // Mini label
+            GUI.Label(r, "Drop here", TimeTrackerGUI.Style(9, ghostBdr, anchor: TextAnchor.MiddleCenter));
+        }
+
+        // ── Floating drag card (drawn in screen space, called AFTER scroll view) ──
+
+        public void DrawDragOverlay(float scrollViewX, float scrollViewY) {
+            if (!_dragActive || _dragTask == null) return;
+
+            // Convert scroll-space mouse to screen space (add scroll view origin + subtract scroll offset)
+            float screenX = scrollViewX + _dragMousePos.x - kanbanScroll.x - _dragOffset.x;
+            float screenY = scrollViewY + _dragMousePos.y - kanbanScroll.y - _dragOffset.y;
+
+            float colW    = colWidthOverride >= 10f
+                ? colWidthOverride
+                : COL_MIN_W;
+            float cardW   = colW - 10f;
+            float cardH   = MeasureCard(_dragTask);
+
+            Rect dragRect = new Rect(screenX, screenY, cardW, cardH);
+
+            // Semi-transparent card
+            Color origColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, 0.62f);
+
+            // Background
+            EditorGUI.DrawRect(dragRect, TimeTrackerGUI.BgCard);
+
+            // Status accent
+            var stColor = GetStatusColor(TaskManagerCore.GetStatus(board, _dragTask.statusId));
+            EditorGUI.DrawRect(new Rect(dragRect.x, dragRect.y, dragRect.width, 2), stColor);
+
+            // Tag tint
+            var firstTag = _dragTask.tagIds != null && _dragTask.tagIds.Count > 0
+                           ? TaskManagerCore.GetTag(board, _dragTask.tagIds[0]) : null;
+            Color tagTint = firstTag != null
+                ? new Color(firstTag.GetColor().r, firstTag.GetColor().g, firstTag.GetColor().b, 0.28f)
+                : new Color(1f, 1f, 1f, 0.04f);
+            Rect titleRow = new Rect(dragRect.x + CARD_PAD_X - 2f, dragRect.y + CARD_PAD_H,
+                                     dragRect.width - CARD_PAD_X * 2 + 2f, LINE_H + 2f);
+            EditorGUI.DrawRect(titleRow, tagTint);
+
+            // Title
+            GUI.Label(new Rect(dragRect.x + CARD_PAD_X + 2f, dragRect.y + CARD_PAD_H + 2f,
+                               dragRect.width - CARD_PAD_X * 2 - 4f, LINE_H),
+                _dragTask.title, TimeTrackerGUI.Style(11, TimeTrackerGUI.BrightColor, FontStyle.Bold));
+
+            // Subtle shadow outline
+            Color shadow = new Color(0f, 0f, 0f, 0.45f);
+            EditorGUI.DrawRect(new Rect(dragRect.x - 1, dragRect.y - 1, dragRect.width + 2, 1), shadow);
+            EditorGUI.DrawRect(new Rect(dragRect.x - 1, dragRect.yMax, dragRect.width + 2, 1), shadow);
+            EditorGUI.DrawRect(new Rect(dragRect.x - 1, dragRect.y, 1, dragRect.height + 2), shadow);
+            EditorGUI.DrawRect(new Rect(dragRect.xMax, dragRect.y, 1, dragRect.height + 2), shadow);
+
+            GUI.color = origColor;
         }
 
         // ── Media helpers ─────────────────────────────────────────────────────
@@ -464,17 +693,23 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 TaskManagerCore.SaveBoard(board);
             }
 
+            bool isDragging = _dragActive && _dragTask == task;
+
             Rect cardRect = new Rect(colX + 5, cardY, colW - 10, cardH);
 
             var  evt     = Event.current;
-            bool hovered = hoveredTaskId == task.id;
-            if (evt.type == EventType.MouseMove || evt.type == EventType.MouseDrag) {
+            bool hovered = hoveredTaskId == task.id && !_dragActive;
+            if (!_dragActive && (evt.type == EventType.MouseMove || evt.type == EventType.MouseDrag)) {
                 bool over = cardRect.Contains(evt.mousePosition);
                 if (over && hoveredTaskId != task.id)  { hoveredTaskId = task.id; repaint?.Invoke(); }
                 else if (!over && hoveredTaskId == task.id) { hoveredTaskId = ""; repaint?.Invoke(); }
             }
 
-            // Card background
+            // Card background — fade out the original while it's being dragged
+            float alpha = isDragging ? 0.22f : 1f;
+            Color origGuiColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, alpha);
+
             Color bg = hovered
                 ? new Color(TimeTrackerGUI.BgCard.r + 0.05f,
                             TimeTrackerGUI.BgCard.g + 0.05f,
@@ -485,6 +720,9 @@ void DrawTopBar(float pad, ref float y, float trackW)
             // Status accent — top border
             var stColor = GetStatusColor(TaskManagerCore.GetStatus(board, task.statusId));
             EditorGUI.DrawRect(new Rect(colX + 5, cardY, colW - 10, 2), stColor);
+
+            // Restore GUI color for content drawing
+            GUI.color = origGuiColor;
 
             // ── Left media column ─────────────────────────────────────────────
             bool   hasMedia  = CardHasMedia(task);
@@ -644,13 +882,17 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 }
             }
 
-            // ── Clickable body — LAST so media/arrow buttons win ──────────────
-            Rect clickBody = new Rect(hasMedia ? contentX : colX + 5, cardY,
-                                      hasMedia ? contentW  : colW - 10, cardH);
-            if (GUI.Button(clickBody, GUIContent.none, GUIStyle.none)) {
-                editingTask  = task;
-                detailScroll = Vector2.zero;
-                repaint?.Invoke();
+            // ── Clickable / draggable body — LAST so media/arrow buttons win ──
+            if (!isDragging) {
+                Rect clickBody = new Rect(hasMedia ? contentX : colX + 5, cardY,
+                                          hasMedia ? contentW  : colW - 10, cardH);
+
+                // Handle MouseDown to start drag-or-click detection
+                if (evt.type == EventType.MouseDown && evt.button == 0 && clickBody.Contains(evt.mousePosition)) {
+                    _dragPending    = task;
+                    _dragStartMouse = evt.mousePosition;
+                    evt.Use();
+                }
             }
         }
 
@@ -1592,7 +1834,9 @@ void DrawTopBar(float pad, ref float y, float trackW)
                 .Select(s => TaskManagerCore.GetTasksForStatus(board, s.id, filter).Count)
                 .DefaultIfEmpty(0).Max();
             float avgCard = CARD_PAD_H + TAG_CHIP_H + 4f + LINE_H + (LINE_H - 2f) + NAV_ROW_H + CARD_PAD_H;
-            return 40f + maxCards * (avgCard + 6f) + 80f;
+            // Add one extra card-height when dragging so ghost slot at end of column isn't clipped
+            float extra = _dragActive ? avgCard + 6f : 0f;
+            return 40f + maxCards * (avgCard + 6f) + 80f + extra;
         }
 
         // ── Public ────────────────────────────────────────────────────────────
