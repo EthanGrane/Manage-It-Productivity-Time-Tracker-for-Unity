@@ -10,12 +10,12 @@ https://github.com/user-attachments/assets/384dab18-e2bf-43e1-a1cd-de1cf7e999f1
 
 Git
 ```bash
-git clone https://github.com/EthanGrane/Unity-Time-Tracker.git
+git clone --branch release https://github.com/EthanGrane/Unity-Time-Tracker.git
 ```
 
 Git URL (Unity Package Manager)
 ```bash
-https://github.com/EthanGrane/Unity-Time-Tracker.git
+https://github.com/EthanGrane/Unity-Time-Tracker.git#release
 ```
 
 Follow these steps to get started:
