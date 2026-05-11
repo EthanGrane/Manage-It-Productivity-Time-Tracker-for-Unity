@@ -15,7 +15,7 @@ git clone https://github.com/EthanGrane/Unity-Time-Tracker.git
 
 Git URL (Unity Package Manager)
 ```bash
-https://github.com/EthanGrane/Unity-Time-Tracker.git
+https://github.com/EthanGrane/Manage-It-Productivity-Time-Tracker-for-Unity.git#release
 ```
 
 Follow these steps to get started:
