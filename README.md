@@ -13,10 +13,20 @@ Git
 git clone https://github.com/EthanGrane/Unity-Time-Tracker.git
 ```
 
+---
+
 Git URL (Unity Package Manager)
 ```bash
 https://github.com/EthanGrane/Manage-It-Productivity-Time-Tracker-for-Unity.git#release
 ```
+<details>
+  <summary>🖨️ Image visual</summary>
+ <img width="33%" height="auto" alt="image" src="https://github.com/user-attachments/assets/29a3356d-426e-4abe-b806-70897e2fbe08" />
+ <img width="33%" height="auto" alt="image" src="https://github.com/user-attachments/assets/6e36af50-0714-4c16-b9f1-a3a2ee280c31" />
+ <img width="862" height="119" alt="image" src="https://github.com/user-attachments/assets/4852d8cc-c02f-488c-a778-b46c50eb5030" />
+</details>
+
+## 🧮 How to use it?
 
 Follow these steps to get started:
 
