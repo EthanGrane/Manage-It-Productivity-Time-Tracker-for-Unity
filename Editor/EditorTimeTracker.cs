@@ -115,8 +115,10 @@ namespace UnityTimeTracker {
             return JsonUtility.FromJson<TimeTrackingData>(json) ?? new TimeTrackingData();
         }
 
-        static void SaveData(TimeTrackingData data)
-        {
+        public static void SaveData(TimeTrackingData data) {
+            string dir = Path.GetDirectoryName(FilePath);
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
             File.WriteAllText(FilePath, JsonUtility.ToJson(data, prettyPrint: true));
         }
     }

@@ -35,7 +35,6 @@ namespace UnityTimeTracker {
     }
 
     // ── Core ──────────────────────────────────────────────────────────────────
-    
 
     [InitializeOnLoad]
     public static class CodeCombatCore {
@@ -57,12 +56,11 @@ namespace UnityTimeTracker {
         public static CombatSaveData State {
             get { if (_state == null) Load(); return _state; }
         }
-        
+
         const string ENABLE_KEY = "CodeCombat_Enabled";
-        const string TOP_DAMAGE_KEY = "CodeCombat_TopDamage";
-        
+
         public static bool Enabled {
-            get => EditorPrefs.GetBool(ENABLE_KEY, false); // 🔥 por defecto OFF
+            get => EditorPrefs.GetBool(ENABLE_KEY, false);
             set {
                 EditorPrefs.SetBool(ENABLE_KEY, value);
                 OnStateChanged?.Invoke();
@@ -79,12 +77,22 @@ namespace UnityTimeTracker {
         public static float HpFraction  =>
             MaxHp > 0 ? Mathf.Clamp01((float)CurrentHp / MaxHp) : 0f;
 
-        const string PREFS_KEY = "CodeCombat_State";
+        // ── File paths ───────────────────────────────────────────────
+
+        static string FilePath => Path.GetFullPath(
+            Path.Combine(Application.dataPath, "..", "CodeCombat.json")
+        );
+
+        static string TopDamagePath => Path.GetFullPath(
+            Path.Combine(Application.dataPath, "..", "CodeCombatTopDamage.json")
+        );
 
         static string SnapshotPath =>
             Path.Combine(
                 Path.GetDirectoryName(Application.dataPath),
                 "Temp", "CodeCombatSnapshot.json");
+
+        // ── Constructor ──────────────────────────────────────────────
 
         static CodeCombatCore() {
             AssemblyReloadEvents.afterAssemblyReload += OnAfterReload;
@@ -149,7 +157,6 @@ namespace UnityTimeTracker {
                 }
                 
                 foreach (var kv in damageByFile) {
-
                     CodeCombatCore.RegisterDamage(kv.Key, kv.Value);
                 }
 
@@ -247,7 +254,7 @@ namespace UnityTimeTracker {
             State.totalDamage += damage;
             State.lastHitTime  = DateTime.Now.ToString("HH:mm:ss");
 
-            EnemyDef enemy = CurrentEnemy; // 🔥 snapshot estable
+            EnemyDef enemy = CurrentEnemy;
 
             int actualDamage = damage;
 
@@ -260,7 +267,7 @@ namespace UnityTimeTracker {
 
                 int overflow = -State.currentHp;
 
-                enemy = CurrentEnemy; // 🔥 actualizar SOLO después del cambio
+                enemy = CurrentEnemy;
 
                 State.currentHp = enemy.maxHp - overflow;
 
@@ -276,38 +283,52 @@ namespace UnityTimeTracker {
         // ── Persistence ──────────────────────────────────────────────
 
         static void Load() {
-            string json = EditorPrefs.GetString(PREFS_KEY, "");
-            if (string.IsNullOrEmpty(json))
+            if (!File.Exists(FilePath)) {
                 _state = new CombatSaveData();
-            else {
-                try { _state = JsonUtility.FromJson<CombatSaveData>(json); }
-                catch { _state = new CombatSaveData(); }
+            } else {
+                string json = File.ReadAllText(FilePath);
+                if (string.IsNullOrWhiteSpace(json))
+                    _state = new CombatSaveData();
+                else {
+                    try { _state = JsonUtility.FromJson<CombatSaveData>(json); }
+                    catch { _state = new CombatSaveData(); }
+                }
             }
-            if (_state.currentHp < 0)         _state.currentHp = CurrentEnemy.maxHp;
-            if (_state.currentHp > CurrentEnemy.maxHp) _state.currentHp = CurrentEnemy.maxHp;
+            if (_state.currentHp < 0)                       _state.currentHp = CurrentEnemy.maxHp;
+            if (_state.currentHp > CurrentEnemy.maxHp)      _state.currentHp = CurrentEnemy.maxHp;
         }
 
-        static void Save() =>
-            EditorPrefs.SetString(PREFS_KEY, JsonUtility.ToJson(_state));
+        static void Save() {
+            try {
+                string dir = Path.GetDirectoryName(FilePath);
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllText(FilePath, JsonUtility.ToJson(_state, true));
+            } catch (Exception e) {
+                Debug.LogError($"[CodeCombat] Error al guardar estado: {e.Message}");
+            }
+        }
 
         public static void ResetState() {
             _state = new CombatSaveData { currentHp = CurrentEnemy.maxHp };
             Save();
             OnStateChanged?.Invoke();
         }
-        
+
         static void SaveTopDamage() {
             try {
-                string json = JsonUtility.ToJson(new Wrapper { list = _topDamage });
-                EditorPrefs.SetString(TOP_DAMAGE_KEY, json);
-            } catch { }
+                string dir = Path.GetDirectoryName(TopDamagePath);
+                if (!Directory.Exists(dir)) Directory.CreateDirectory(dir);
+                File.WriteAllText(TopDamagePath, JsonUtility.ToJson(new Wrapper { list = _topDamage }, true));
+            } catch (Exception e) {
+                Debug.LogError($"[CodeCombat] Error al guardar top damage: {e.Message}");
+            }
         }
 
         static void LoadTopDamage() {
             try {
-                string json = EditorPrefs.GetString(TOP_DAMAGE_KEY, "");
-                if (string.IsNullOrEmpty(json)) return;
-
+                if (!File.Exists(TopDamagePath)) return;
+                string json = File.ReadAllText(TopDamagePath);
+                if (string.IsNullOrWhiteSpace(json)) return;
                 var wrapper = JsonUtility.FromJson<Wrapper>(json);
                 _topDamage = wrapper?.list ?? new List<ScriptDamageEntry>();
             } catch {
